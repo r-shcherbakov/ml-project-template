@@ -5,25 +5,14 @@ description = "{{ project_description }}"
 license = "Unlicense"
 authors = ["{{ author_name }} <{{ author_email }}>"]
 maintainers = []
-repository = "{{ repository_provider }}/{{ repository_namespace }}/{{ package_name_py }}"
-documentation = "{{ repository_provider }}/{{ repository_namespace }}/{{ package_name_py }}/docs"
+repository = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package_name_py }}"
+documentation = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package_name_py }}/docs"
 readme = "README.md"
 include = ["LICENSE"]
 packages = [{ include = "{{project_name}}", from = "src" }]
-keywords = []
-classifiers = [
-    "Development Status :: 1 - Planning",
-    "License :: OSI Approved :: The Unlicense (Unlicense)",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-] # https://pypi.org/classifiers/
-
-[tool.poetry.urls]
-"Bug Tracker" = "{{ repository_provider }}/{{ repository_namespace }}/{{ package_name_py }}/issues"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "{{ python_version }}"
 
 [tool.poetry.dev-dependencies]
 black = "*"
@@ -42,6 +31,11 @@ pytest-mock = "*"
 pytest-profiling = "*"
 pytest-sugar = "*"
 pytest-xdist = "*"
+
+[[tool.poetry.source]]
+name = "art-gpn"
+url = "https://artifactory-gpn.nexign.com/artifactory/api/pypi/pypi/simple"
+default = true
 
 [tool.bandit]
 # exclude_dirs = [".venv", "shared"]
@@ -125,7 +119,7 @@ log_cli = true
 # testpaths = []
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 # pycodestyle doesn't support this config file!  # Use flake8 above instead.

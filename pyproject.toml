@@ -2,13 +2,10 @@
 skips = ['*_test.py', '*test_*.py', '*unittest.py']
 
 [tool.poetry]
-name = "copier-python-template"
+name = "ml-project-template"
 version = "0.0.1"
-description = "Copier template for my python projects."
-license = "Unlicense"
-authors = ["Francis T. O'Donovan <proinsias@users.noreply.github.com>"]
-repository = "https://github.com/proinsias/copier-python-template"
-documentation = "https://github.com/proinsias/copier-python-template"
+description = "Copier template for ML python projects."
+authors = [""]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -20,13 +17,14 @@ pyright = "^1.1.275"
 pytest = "^6.2"
 yamllint = "^1.26.3"
 
-[tool.poetry.urls]
-"Bug Tracker" = "https://github.com/proinsias/copier-python-template/issues"
-
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[[tool.poetry.source]]
+name = "art-gpn"
+url = "https://artifactory-gpn.nexign.com/artifactory/api/pypi/pypi/simple"
+default = true
 
 # FIXME:
 # Add tox.ini stuff here. Including tox config itself!

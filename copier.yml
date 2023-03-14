@@ -19,22 +19,21 @@ _envops:
 _subdirectory: copier-python-template
 _skip_if_exists:
   - LICENSE
-#   - "{{ package_name_py }}/__init__.py"
-#   - "{{ doc_dir }}/README.md"
-#   - pyproject.toml
-# _tasks:
-#   - git init
-#   - python _copier_post_generation.py
-#   # Initialize poetry and git
-#   - git log &>/dev/null || poetry lock -q
-#   - git log &>/dev/null || poetry show --tree | grep '^\w' | awk '{
-#     print $1 }' | sed 's/$/@latest/' | xargs poetry add -Dq
-#   - git log &>/dev/null || git init
-#   - git log &>/dev/null || git add --all
-#   - git log &>/dev/null || git commit -qm 'initial commit'
-#   - git log &>/dev/null || echo gh repo create -y
-#     {{repo_username}}/{{repo_name}} {% if private %}--private{% else
-#     %}--public{% endif %}
+  - "{{ package_name_py }}/__init__.py"
+  - "{{ doc_dir }}/README.md"
+  - pyproject.toml
+_tasks:
+  - git init
+  # Initialize poetry and git
+  - git log &>/dev/null || poetry lock -q
+  - git log &>/dev/null || poetry show --tree | grep '^\w' | awk '{
+    print $1 }' | sed 's/$/@latest/' | xargs poetry add -Dq
+  - git log &>/dev/null || git init
+  - git log &>/dev/null || git add --all
+  - git log &>/dev/null || git commit -qm 'initial commit'
+  - git log &>/dev/null || echo gh repo create -y
+    {{repo_username}}/{{repo_name}} {% if private %}--private{% else
+      %}--public{% endif %}
 
 # ====== QUESTIONS ======
 project_name:
@@ -50,30 +49,42 @@ project_description:
   type: str
   help: Your project description
 
+python_version:
+  type: str
+  choices:
+    - ^3.8
+    - ^3.9
+    - ^3.11
+
 author_name:
   type: str
   help: Your full name
-  default: "Francis T. O'Donovan"
+  default: Name.Surname
 
 author_email:
   type: str
   help: Your account email
-  default: proinsias@users.noreply.github.com
+  default: '{{ author_name }}@nedra.digital'
+
+pip_username:
+  type: str
+  secret: true # This value will not be logged into .copier-answers.yml
+  default: name.surname
+
+pip_password:
+  type: str
+  secret: true # This value will not be logged into .copier-answers.yml
+  default: name.surname
 
 repository_provider:
   type: str
   help: Your repository provider
-  default: https://github.com
+  default: https://stash-gpn.nexign.com/projects
 
-author_username:
+project_namespace:
   type: str
-  help: 'Your username for {{ repository_provider }}'
-  default: proinsias
-
-repository_namespace:
-  type: str
-  help: 'Your repository namespace (i.e. {{ repository_provider }}/<namespace>/{{ package_name_py }}'
-  default: '{{ author_username }}'
+  help: 'Your project namespace (i.e. {{ repository_provider }}/<namespace>/repos/{{ package_name_py }}'
+  default: NDRCOM
 
 copyright_date:
   type: str
