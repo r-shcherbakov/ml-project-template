@@ -66,16 +66,6 @@ author_email:
   help: Your account email
   default: '{{ author_name }}@nedra.digital'
 
-pip_username:
-  type: str
-  secret: true # This value will not be logged into .copier-answers.yml
-  default: name.surname
-
-pip_password:
-  type: str
-  secret: true # This value will not be logged into .copier-answers.yml
-  default: name.surname
-
 repository_provider:
   type: str
   help: Your repository provider
