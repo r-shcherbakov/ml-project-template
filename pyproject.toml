@@ -21,11 +21,6 @@ yamllint = "^1.26.3"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[[tool.poetry.source]]
-name = "art-gpn"
-url = "https://artifactory-gpn.nexign.com/artifactory/api/pypi/pypi/simple"
-default = true
-
 # FIXME:
 # Add tox.ini stuff here. Including tox config itself!
 # black, coverage, pytest, mypy, vulture,

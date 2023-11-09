@@ -64,17 +64,15 @@ author_name:
 author_email:
   type: str
   help: Your account email
-  default: '{{ author_name }}@nedra.digital'
+  default: '{{ author_name }}@mail.com'
 
 repository_provider:
   type: str
   help: Your repository provider
-  default: https://stash-gpn.nexign.com/projects
 
 project_namespace:
   type: str
   help: 'Your project namespace (i.e. {{ repository_provider }}/<namespace>/repos/{{ package_name_py }}'
-  default: NDRCOM
 
 copyright_date:
   type: str
