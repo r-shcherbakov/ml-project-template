@@ -1,4 +1,0 @@
-*
-!src/*
-!pyproject.toml
-!poetry.lock

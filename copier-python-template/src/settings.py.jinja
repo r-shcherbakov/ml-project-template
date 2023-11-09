@@ -1,0 +1,120 @@
+# -*- coding: utf-8 -*-
+'''Pipeline settings'''
+import os
+import logging
+from pathlib import Path
+from pathlib import PosixPath as PosixPathBase
+import random
+from typing import List
+
+import numpy as np
+from pydantic import BaseModel, Field, validator
+from pydantic.json import ENCODERS_BY_TYPE
+from pydantic_settings import BaseSettings
+
+from utilities.logging import set_logging
+
+ENCODERS_BY_TYPE |= {PosixPathBase: Path}
+PROJECT_PATH = Path(__file__).resolve().parents[1]
+
+
+def fix_seed(random_seed: int = 42) -> None:
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+
+
+class PosixPath(PosixPathBase):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v) -> PosixPathBase:
+        """Attempt to convert a value to a PurePosixPath"""
+        if isinstance(v, str):
+            return PosixPath(v)
+        elif isinstance(v, PosixPathBase):
+            return v
+        raise TypeError("Type must be string or PurePosixPath")
+
+
+class StorageSettings(BaseModel):
+    root_folder: PosixPath = Field(
+        PosixPath(os.path.join(PROJECT_PATH, 'data')), 
+        description='Path to the mounted dataset storage')
+    pipeline_raw_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'raw')), 
+        description='Path to the raw pipeline data')   
+    pipeline_external_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'external')), 
+        description='Path to the external data for pipeline (labels and etc.)')   
+    pipeline_processed_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'processed')), 
+        description='Path to the processed pipeline data')   
+    pipeline_features_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'features')), 
+        description='Path to the pipeline data with features')
+    pipeline_splitted_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'splitted')), 
+        description='Path to the splitted pipeline data')
+    pipeline_train_folder: PosixPath = Field(
+        PosixPath(os.path.join(pipeline_splitted_folder.default, 'train')), 
+        description='Path to the train pipeline data')
+    pipeline_test_folder: PosixPath = Field(
+        PosixPath(os.path.join(pipeline_splitted_folder.default, 'test')), 
+        description='Path to the test pipeline data')
+    pipeline_prediction_folder: PosixPath = Field(
+        PosixPath(os.path.join(root_folder.default, 'prediction')), 
+        description='Path to the predictions of ml model')
+    
+    
+class ClearmlSettings(BaseModel):
+    execute_remotely: bool = Field(False, description='Option to enqueue task for remote execution')
+    queue_name: str = Field('default', description='The name of the queue')
+    project: str = Field("{{ project_name }}", description='Project name for the tasks')
+    tags: List[str] = Field(
+        ["{{ project_name }}"], 
+        description=' A list of tags which describe the Task to add'
+        )
+    # output_url: str = Field('s3://bucket/data', description='Target storage for the compressed dataset')
+
+
+class ParallelbarSettings(BaseModel):
+    n_cpu: int = Field(3)
+    process_timeout: int = Field(3600, description='Timeout of one process in seconds')
+    error_behavior: str = Field('coerce', description='Specifies what to do upon encountering an error')
+    
+    
+class LoggingSettings(BaseModel):
+    level: int = Field(logging.INFO, description='Timeout of one process in seconds')
+
+
+class Settings(BaseSettings):
+    params_path: PosixPath = Field(
+        os.path.join(Path(__file__).resolve().parent, 'params.yaml'), 
+        description='Path to the experiment parameters config')
+    labels_path: PosixPath = Field(
+        os.path.join(Path(__file__).resolve().parent, 'label_config.yaml'), 
+        description='Path to the labels')
+    random_seed: int = Field(42, description='Seed for equivalent experiment results')
+    
+    clearml: ClearmlSettings = Field(default_factory=ClearmlSettings)
+    parallelbar: ParallelbarSettings = Field(default_factory=ParallelbarSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    
+    class Config:
+        env_file = os.getenv('ENV', '.env')
+        env_nested_delimiter = '__'
+        
+    @validator('random_seed')
+    def fix_seed(cls, random_seed):
+        fix_seed(random_seed)
+        return random_seed
+        
+    @validator('logging')
+    def set_logging(cls, logging):
+        set_logging(logging.level)
+        return logging
+        
+    

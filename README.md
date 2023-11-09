@@ -1,11 +1,12 @@
 # copier-python-template
 
-[Copier](https://copier.readthedocs.io/en/stable/) template for my python projects.
+[Copier](https://copier.readthedocs.io/en/stable/) template for python projects.
 
-This template aims at making it easier to configure my python
-projects.
+This template aims at making it easier to configure machine learning python
+projects tracked with ClearML. 
 It uses Copier to keep my projects updated with a unified GH Actions
 structure and configuration.
+This project is still in progress and will be updated.
 
 ## First usage
 
