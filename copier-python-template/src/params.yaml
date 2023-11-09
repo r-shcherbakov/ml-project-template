@@ -1,0 +1,19 @@
+common:
+  mandatory_features:
+  - target
+  forbidden_features:
+  - GROUP_ID
+
+preprocessor:
+  skip_mark: False
+
+feature_engineer:
+
+split_dataset:
+  add_test: True
+  num_test_objects: 2
+
+train:
+  skip_cv: True
+  n_splits: 4
+  train_final_model: True

@@ -13,6 +13,14 @@ packages = [{ include = "{{project_name}}", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "{{ python_version }}"
+Bottleneck = "*"
+clearml = "*"
+numpy = "*"
+pandas = "*"
+parallelbar = "*"
+pydantic = "*"
+pydantic-settings = "*"
+pyod = "*"
 
 [tool.poetry.dev-dependencies]
 black = "*"
@@ -31,11 +39,7 @@ pytest-mock = "*"
 pytest-profiling = "*"
 pytest-sugar = "*"
 pytest-xdist = "*"
-
-[[tool.poetry.source]]
-name = "art-gpn"
-url = "https://artifactory-gpn.nexign.com/artifactory/api/pypi/pypi/simple"
-default = true
+pydantic = "*"
 
 [build-system]
 requires = ["poetry-core"]
