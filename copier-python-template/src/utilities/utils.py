@@ -31,6 +31,27 @@ def get_abs_path(path: Union[str, Path]) -> Path:
         return Path(os.path.join(PROJECT_PATH, path))
     
     
+def get_last_modified(path: Union[str, Path], suffixes: list = None) -> Path:
+    """Returns path of last modified file with required suffix.
+
+    Args:
+        path (Union[str, Path]): Input directory.
+        suffixes (list, optional): List of required suffixes.
+            Defaults to None.
+
+    Returns:
+        Path: Path of last modified file with required suffix.
+    """
+
+    path = Path(path)
+    path_files = path.iterdir()
+    suffixes = suffixes if suffixes is not None else [""]
+    read_files = filter(
+        lambda path_files: path_files.suffix in suffixes, Path(path).rglob("*.*")
+    )
+    return max(read_files, key=os.path.getctime)
+    
+    
 def check_directory(filepath: Union[str, Path]) -> Path:
     """Check and create missing directory.
 
