@@ -1,16 +1,21 @@
+# Names are same as PipelineSteps
 common:
   mandatory_features:
   - target
   forbidden_features:
   - GROUP_ID
 
-preprocessor:
+preprocess:
   skip_mark: False
 
 feature_engineer:
+  some_int_parameter: 1
+
+select_features:
+  some_int_parameter: 1
 
 split_dataset:
-  add_test: True
+  split_test: True
   num_test_objects: 2
 
 train:
