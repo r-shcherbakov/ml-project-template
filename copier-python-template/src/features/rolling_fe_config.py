@@ -18,11 +18,11 @@ DEFAULT_CONFIG = {
             {"transform_name": "Converter",
                 "config": {
                     "method": "substract",
-                    "first_window": SECONDS_IN_MINUTE * 2,  # 2 minutes
+                    "first_window": SECONDS_IN_MINUTE * 2,
                     "first_shift_size": 0,
                     "first_agg_func": "median",
                     "second_window": SECONDS_IN_MINUTE * 2,
-                    "second_shift_size": SECONDS_IN_MINUTE * 15,  # 15 minutes ago
+                    "second_shift_size": SECONDS_IN_MINUTE * 15, 
                     "second_agg_func": "median",
                     },
                 },
