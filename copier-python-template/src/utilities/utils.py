@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Main project utils"""
 import os
+from collections.abc import Iterable
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 import numpy as np
@@ -31,7 +32,7 @@ def get_abs_path(path: Union[str, Path]) -> Path:
         return Path(os.path.join(PROJECT_PATH, path))
     
     
-def get_last_modified(path: Union[str, Path], suffixes: list = None) -> Path:
+def get_last_modified(path: Union[str, Path], suffixes: Optional[List] = None) -> Path:
     """Returns path of last modified file with required suffix.
 
     Args:
@@ -67,7 +68,31 @@ def check_directory(filepath: Union[str, Path]) -> Path:
     return filepath
     
 
-def compress_pickle(path: Path, data: pd.DataFrame) -> None:
+def is_empty_dir(path: Union[str, Path]) -> bool:
+    """Checking if the directory is empty or not.
+
+    Args:
+        path (Union[str, Path]): checked path.
+
+    Raises:
+        ValueError: in case of missing path or file path.
+
+    Returns:
+        bool: True or False.
+    """    
+    if os.path.exists(path) and not os.path.isfile(path):
+  
+        # Checking if the directory is empty or not
+        if not os.listdir(path):
+            return True
+        else:
+            return False
+    else:
+        raise ValueError("The path is either for a file or not valid")
+    
+
+
+def compress_pickle(path: Path, data: pd.DataFrame) -> Path:
     """Saves compressed dataframe to storage.
 
     Args:
@@ -84,6 +109,8 @@ def compress_pickle(path: Path, data: pd.DataFrame) -> None:
     data.to_pickle(
         output_filepath, compression={"method": "gzip", "compresslevel": 1, "mtime": 1}
     )
+    
+    return output_filepath
 
 
 def convert_columns_type(data: pd.DataFrame) -> pd.DataFrame:
@@ -176,3 +203,42 @@ def get_subclasses(cls):
         subclasses.append(subclass)
         subclasses.extend(get_subclasses(subclass))
     return subclasses
+
+
+def invert_dict(input: Dict[Any, Union[Any, Iterable[Any]]]) -> Dict[Any, Any]:
+    """Inverts dictionary.
+
+    Args:
+        input (Dict[Any, List[Any]]): Input data.
+
+    Returns:
+        Dict[Any, Any]: Inverted dictionary.
+    """
+
+    inverted_dict = {}
+    for key, values in input.items():
+        if isinstance(values, Iterable):
+            inverted_dict.update({value: key for value in values})
+        else:
+            inverted_dict.update({values: key})
+    return inverted_dict
+
+
+def split_dataframe(data: pd.DataFrame) -> List[pd.DataFrame]:
+    df_size = (data.memory_usage(index=True, deep=True).sum() / (1024**2)).round().astype(int)
+    n_splits = int(df_size // 10) # each df no more than 10mb
+    
+    dataframes = []
+    if n_splits == 0:
+        return [data]
+    
+    splitting_index = len(data) // n_splits
+    start_index = 0
+    end_index = splitting_index
+    for _ in range(n_splits):
+        ldf = data.loc[start_index:end_index, :]
+        dataframes.append(ldf)
+        start_index += splitting_index
+        end_index += splitting_index
+        
+    return dataframes
