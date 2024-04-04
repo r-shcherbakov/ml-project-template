@@ -1,10 +1,10 @@
 from clearml.automation import PipelineController
 
 from common.enums import PipelineSteps
-from settings import ExperimentSettings
+from settings import Settings
 
 
-settings = ExperimentSettings()
+settings = Settings()
 
 def post_execute_callback(a_pipeline: PipelineController, a_node: PipelineController.Node) -> None:
     print('Completed Task id={}'.format(a_node.executed))
@@ -22,48 +22,48 @@ pipe = PipelineController(
 )
 
 pipe.add_step(
-    name=f'{PipelineSteps.preprocess} step',
+    name=f'{PipelineSteps.preprocess.name} step',
     base_task_project=settings.clearml.project,
-    base_task_name=f'{PipelineSteps.preprocess} task',
+    base_task_name=f'{PipelineSteps.preprocess.name} task',
     cache_executed_step=True,
     post_execute_callback=post_execute_callback,
     retry_on_failure=5,
 )
 
 pipe.add_step(
-    name=f'{PipelineSteps.feature_engineer} step',
-    parents=[f'{PipelineSteps.preprocess} step'],
+    name=f'{PipelineSteps.feature_engineer.name} step',
+    parents=[f'{PipelineSteps.preprocess.name} step'],
     base_task_project=settings.clearml.project,
-    base_task_name=f'{PipelineSteps.feature_engineer} task',
+    base_task_name=f'{PipelineSteps.feature_engineer.name} task',
     cache_executed_step=True,
     post_execute_callback=post_execute_callback,
     retry_on_failure=5,
 )
 
 pipe.add_step(
-    name=f'{PipelineSteps.split_dataset} step',
-    parents=[f'{PipelineSteps.feature_engineer} step'],
+    name=f'{PipelineSteps.split_dataset.name} step',
+    parents=[f'{PipelineSteps.feature_engineer.name} step'],
     base_task_project=settings.clearml.project,
-    base_task_name=f'{PipelineSteps.split_dataset} task',
+    base_task_name=f'{PipelineSteps.split_dataset.name} task',
     cache_executed_step=True,
     post_execute_callback=post_execute_callback,
     retry_on_failure=5,
 )
 
 pipe.add_step(
-    name=f'{PipelineSteps.train} step',
-    parents=[f'{PipelineSteps.split_dataset} step'],
+    name=f'{PipelineSteps.train.name} step',
+    parents=[f'{PipelineSteps.split_dataset.name} step'],
     base_task_project=settings.clearml.project,
-    base_task_name=f'{PipelineSteps.train} task',
+    base_task_name=f'{PipelineSteps.train.name} task',
     cache_executed_step=True,
     post_execute_callback=post_execute_callback,
 )
 
 pipe.add_step(
-    name=f'{PipelineSteps.plotting} step',
-    parents=[f'{PipelineSteps.train} step'],
+    name=f'{PipelineSteps.plotting.name} step',
+    parents=[f'{PipelineSteps.train.name} step'],
     base_task_project=settings.clearml.project,
-    base_task_name=f'{PipelineSteps.plotting} task',
+    base_task_name=f'{PipelineSteps.plotting.name} task',
     cache_executed_step=True,
     post_execute_callback=post_execute_callback,
 )
