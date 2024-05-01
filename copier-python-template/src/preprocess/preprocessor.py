@@ -4,9 +4,10 @@ import logging
 from typing import Optional
 
 import pandas as pd
+from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
-from core.transformer import BaseTransformer
+from core import BaseTransformer
 from utilities.transformers import DuplicatedColumnsTransformer, ColumnsTypeTransformer, \
     ClipTransformer, InfValuesTransformer, FillNanTransformer, TimeResampler
 
@@ -23,8 +24,6 @@ class Preprocessor(BaseTransformer):
         """
         
         self.extra_pipeline = extra_pipeline if isinstance(extra_pipeline, Pipeline) else None
-        if self.extra_pipeline:
-            self.extra_pipeline.set_output(transform="pandas")
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """Transforms raw data with basic preprocess methods and
@@ -46,7 +45,9 @@ class Preprocessor(BaseTransformer):
                 ("fill_nan", FillNanTransformer()),
                 ("resampler", TimeResampler()),
             ]
-        ).set_output(transform="pandas")
+        )
+        set_config(transform_output="pandas")
+        
         df = common_pipeline.transform(df)
         if self.extra_pipeline is not None:
             df = self.extra_pipeline.transform(df)

@@ -21,8 +21,8 @@ from common.pipeline_steps import (
     SPLIT_DATASET,
     PREPROCESS,
 )
-from core.pipeline_step import BasePipelineStep
-from preprocess.loaders import PickleLoader
+from core import BasePipelineStep
+from utilities.loaders import PickleLoader
 from settings import Settings
 from utilities.utils import (
     is_empty_dir,
@@ -119,8 +119,8 @@ class PlottingPipelineStep(BasePipelineStep):
             ldf = self.processed[mask].copy()
             splitted_ldf = split_dataframe(ldf)
 
+            plotter = Plotter()
             for i, small_ldf in enumerate(splitted_ldf):
-                plotter = Plotter(
                     data=small_ldf,
                     filepath=Path(os.path.join(self._get_output_directory, f"{file_name}_part{i+1}")),
                     title=file_name,

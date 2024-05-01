@@ -18,11 +18,11 @@ import pandas as pd
 from sklearn.model_selection import GroupKFold
 from tqdm import tqdm
 
-from core.pipeline_step import BasePipelineStep
+from core import BasePipelineStep
 from common.exceptions import PipelineExecutionError
 from common.pipeline_steps import TRAIN
 from common.constants import GENERAL_EXTENSION, IGNORED_FEATURES
-from preprocess.loaders import PickleLoader
+from utilities.loaders import PickleLoader
 from settings import Settings
 from utilities.utils import (
     is_empty_dir,

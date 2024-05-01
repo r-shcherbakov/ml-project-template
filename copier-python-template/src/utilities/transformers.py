@@ -13,7 +13,7 @@ from sklearn.pipeline import Pipeline
 
 from common.config import ACCEPTED_BOUNDARIES, FILLNA_CONFIG
 from common.constants import SECONDS_IN_HOUR, SECONDS_IN_MINUTE
-from core.transformer import BaseTransformer
+from core import BaseTransformer
 from utilities.utils import get_subclasses, convert_columns_type, get_common_timestep
 
 LOGGER = logging.getLogger(__name__)

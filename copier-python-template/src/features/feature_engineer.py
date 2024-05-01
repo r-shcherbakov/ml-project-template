@@ -7,9 +7,10 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
-from core.transformer import BaseTransformer
+from core import BaseTransformer
 from utilities.transformers import InfValuesTransformer, ColumnsTypeTransformer, ALL_TRANSFORMERS
 from utilities.utils import get_common_timestep
 
@@ -60,7 +61,8 @@ class FeatureEngineer(BaseFeatureEngineer):
             [
                 ("drop_inf_values", InfValuesTransformer()),
             ]
-        ).set_output(transform="pandas")
+        )
+        set_config(transform_output="pandas")
         self.data = pipe.transform(self.data)
         self._get_all_masks()
 

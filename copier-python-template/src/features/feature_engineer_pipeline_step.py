@@ -12,9 +12,9 @@ from parallelbar import progress_map
 from common.constants import GENERAL_EXTENSION
 from common.exceptions import PipelineExecutionError
 from common.pipeline_steps import FEATURE_ENGINEER
-from core.pipeline_step import BasePipelineStep
+from core import BasePipelineStep
 from features.feature_engineer import FeatureEngineer
-from preprocess.loaders import PickleLoader
+from utilities.loaders import PickleLoader
 from settings import Settings
 from utilities.utils import is_empty_dir
 

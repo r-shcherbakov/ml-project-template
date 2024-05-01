@@ -14,8 +14,8 @@ from tqdm import tqdm
 from common.constants import GENERAL_EXTENSION
 from common.exceptions import PipelineExecutionError
 from common.pipeline_steps import SPLIT_DATASET
-from core.pipeline_step import BasePipelineStep
-from preprocess.loaders import PickleLoader
+from core import BasePipelineStep
+from utilities.loaders import PickleLoader
 from settings import Settings
 from utilities.utils import is_empty_dir
 

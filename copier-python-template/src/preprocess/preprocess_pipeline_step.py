@@ -8,13 +8,14 @@ from typing import List, Union
 import warnings
 
 from parallelbar import progress_map
+from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
 from common.constants import GENERAL_EXTENSION
 from common.exceptions import PipelineExecutionError
 from common.pipeline_steps import PREPROCESS
-from core.pipeline_step import BasePipelineStep
-from preprocess.loaders import CsvLoader
+from core import BasePipelineStep
+from utilities.loaders import CsvLoader
 from preprocess.preprocessor import Preprocessor, MarkDataTransformer
 from settings import Settings
 from utilities.utils import is_empty_dir
@@ -82,16 +83,17 @@ class PreprocessPipelineStep(BasePipelineStep):
         if self.step_params.get('skip_mark', True):
             step_pipeline = Pipeline(
                 [
-                    ("reprocessor", Preprocessor())
+                    ("preprocessor", Preprocessor())
                  ]
-            ).set_output(transform="pandas")
+            )
         else:
             step_pipeline = Pipeline(
                 [
-                    ("reprocessor", Preprocessor()),
+                    ("preprocessor", Preprocessor()),
                     ("add_target", MarkDataTransformer()),
                  ]
-            ).set_output(transform="pandas")
+            )
+        set_config(transform_output="pandas")
                  
         # Transform data
         try:    
