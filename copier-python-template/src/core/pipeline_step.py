@@ -17,6 +17,7 @@ from common.exceptions import (
 )
 from settings import Settings
 from utilities.utils import compress_pickle
+from utilities.path_utils import get_directory_files
 
 
 class BasePipelineStep(ABC):
@@ -128,40 +129,67 @@ class BasePipelineStep(ABC):
     
     def _download_input_dataset(self) -> None:
         try:
-            self.remote_dataset = Dataset.get(
+            remote_dataset = Dataset.get(
                 dataset_project=self.settings.clearml.project,
                 dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
                 f"input dataset",
+                dataset_tags=self.settings.clearml.tags,
+                only_completed=True,
             )
         except ValueError:
             raise DatasetDownloadError
         
         _ = Path(
-                self.remote_dataset.get_mutable_local_copy(
+                remote_dataset.get_local_copy(
                    self._get_input_directory,
                 )
             )
            
     def _upload_input_dataset(self) -> None:
-        self.remote_dataset = Dataset.create(
-            dataset_project=self.settings.clearml.project,
-            dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
-            f"input dataset",
-        )  
-        self.remote_dataset.add_files(path=self._get_output_directory)
-        self.remote_dataset.upload()
-        self.remote_dataset.finalize()
+        local_dataset = None
+        try:
+            remote_dataset = Dataset.get(
+                dataset_project=self.settings.clearml.project,
+                dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
+                f"input dataset",
+                dataset_tags=self.settings.clearml.tags,
+                only_completed=True,
+            )
+        except ValueError:
+            remote_dataset = None
+            
+        if remote_dataset:
+            local_files = get_directory_files(self._get_input_directory)
+            has_untracked_data = len(set(local_files) - set(remote_dataset.list_files())) > 0
+            if has_untracked_data:
+                local_dataset = Dataset.create(
+                    dataset_project=self.settings.clearml.project,
+                    dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
+                    f"input dataset",
+                    dataset_tags=self.settings.clearml.tags,
+                    parent_datasets=[remote_dataset],
+                )  
+                local_dataset.sync_folder(local_path=self._get_input_directory)
+        else:
+            local_dataset = Dataset.create(
+                dataset_project=self.settings.clearml.project,
+                dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
+                f"input dataset",
+                dataset_tags=self.settings.clearml.tags,    
+            )  
+            local_dataset.add_files(path=self._get_input_directory)
+        
+        if local_dataset:
+            local_dataset.finalize(auto_upload=True)
         
     def _upload_output_dataset(self) -> None:
         dataset = Dataset.create(
             dataset_project=self.settings.clearml.project,
             dataset_name=f"{self.settings.clearml.project} {self.pipeline_step.name.replace('_', ' ')} "
             f"output dataset",
-            parent_datasets=[self.remote_dataset.id],
         )  
         dataset.add_files(path=self._get_output_directory)
-        dataset.upload()
-        dataset.finalize()
+        dataset.finalize(auto_upload=True)
         
     def _save_locally_data(
         self,
