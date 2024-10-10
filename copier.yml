@@ -1,0 +1,89 @@
+---
+# ====== jinja ======
+# Configure template to use standard jinja2 syntax
+# From: https://github.com/Tecnativa/doodba-copier-template/blob/stable/copier.yml#L1-L10
+_templates_suffix: .jinja
+_envops:
+  block_end_string: '%}'
+  block_start_string: '{%'
+  comment_end_string: '#}'
+  comment_start_string: '{#'
+  keep_trailing_newline: true
+  variable_end_string: '}}'
+  variable_start_string: '{{'
+
+# ====== TEMPLATE ======
+# _answers_file: .copier-answers.yml
+# _exclude:
+#  - /.git
+_subdirectory: copier-python-template
+_skip_if_exists:
+  - LICENSE
+  - "{{ package_name_py }}/__init__.py"
+  - "{{ doc_dir }}/README.md"
+  - pyproject.toml
+_tasks:
+  - git init
+  # Initialize poetry and git
+  - git log &>/dev/null || poetry lock -q
+  - git log &>/dev/null || poetry show --tree | grep '^\w' | awk '{
+    print $1 }' | sed 's/$/@latest/' | xargs poetry add -Dq
+  - git log &>/dev/null || git init
+  - git log &>/dev/null || git add --all
+  - git log &>/dev/null || git commit -qm 'initial commit'
+  - git log &>/dev/null || echo gh repo create -y
+    {{repo_username}}/{{repo_name}} {% if private %}--private{% else
+      %}--public{% endif %}
+
+# ====== QUESTIONS ======
+project_name:
+  type: str
+  help: Your project name (can have spaces)
+
+package_name_py:
+  type: str
+  help: Your Python package name (should be in `snake_case`)
+  default: "{{ project_name|lower|replace('-', '_')|replace(' ', '_') }}"
+
+project_description:
+  type: str
+  help: Your project description
+
+python_version:
+  type: str
+  choices:
+    - ^3.8
+    - ^3.9
+    - ^3.11
+
+author_name:
+  type: str
+  help: Your full name
+  default: Name.Surname
+
+author_email:
+  type: str
+  help: Your account email
+  default: '{{ author_name }}@mail.com'
+
+repository_provider:
+  type: str
+  help: Your repository provider
+
+project_namespace:
+  type: str
+  help: 'Your project namespace (i.e. {{ repository_provider }}/<namespace>/repos/{{ package_name_py }}'
+
+copyright_date:
+  type: str
+  help: The copyright date
+  default: '{{ now().year }}'
+
+doc_dir:
+  type: str
+  help: Relative path to the documentation source file directory. Default is "docs/"
+  default: docs/
+
+docker:
+  type: bool
+  default: false

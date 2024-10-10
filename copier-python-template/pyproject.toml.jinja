@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "{{ package_name_py }}"
+version = "0.0.1"
+description = "{{ project_description }}"
+license = "Unlicense"
+authors = ["{{ author_name }} <{{ author_email }}>"]
+maintainers = []
+repository = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package_name_py }}"
+documentation = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package_name_py }}/docs"
+readme = "README.md"
+include = ["LICENSE"]
+packages = [{ include = "{{project_name}}", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "{{ python_version }}"
+Bottleneck = "*"
+catboost = "*"
+clearml = "*"
+numpy = "*"
+pandas = "*"
+parallelbar = "*"
+pydantic = "*"
+pydantic-settings = "*"
+pyod = "*"
+
+[tool.poetry.dev-dependencies]
+black = "*"
+flakehell = "*"
+isort = "*"
+{% if docs -%}
+mkdocs = "*"
+mkdocs-material = "*"
+{%- endif %}
+mypy = "*"
+poethepoet = "*"
+pre-commit = "*"
+pytest = "*"
+pytest-black = "*"
+pytest-mock = "*"
+pytest-profiling = "*"
+pytest-sugar = "*"
+pytest-xdist = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

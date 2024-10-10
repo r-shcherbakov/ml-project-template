@@ -1,0 +1,22 @@
+[tool.bandit.assert_used]
+skips = ['*_test.py', '*test_*.py', '*unittest.py']
+
+[tool.poetry]
+name = "ml-project-template"
+version = "0.0.1"
+description = "Copier template for ML python projects."
+authors = [""]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+copier = "^5.1.0"
+pyright = "^1.1.275"
+pytest = "^6.2"
+yamllint = "^1.26.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
