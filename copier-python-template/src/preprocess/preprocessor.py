@@ -7,10 +7,15 @@ from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
 from core import BaseTransformer
+from common.config import (
+    FEATYPE_TYPES,
+    FILLNA_CONFIG,
+    CLIP_CONFIG,
+)
 from utilities.transformers import (
     DuplicatedColumnsTransformer,
-    ColumnsTypeTransformer, 
-    ClipTransformer, 
+    ColumnsTypeTransformer,
+    ClipTransformer,
     InfValuesTransformer,
     FillNanTransformer,
     TimeResampler,
@@ -29,20 +34,20 @@ class Preprocessor(BaseTransformer):
         Returns:
             pd.DataFrame: Dataframe of preprocessed data.
         """
-        
+
         data = X.copy()
         common_pipeline = Pipeline(
             [
                 ("drop_duplicate_columns", DuplicatedColumnsTransformer()),
-                ("convert_columns_type", ColumnsTypeTransformer()),
-                ("drop_outliers", ClipTransformer()),
+                ("convert_columns_type", ColumnsTypeTransformer(config=FEATYPE_TYPES)),
+                ("drop_outliers", ClipTransformer(config=CLIP_CONFIG)),
                 ("drop_inf_values", InfValuesTransformer()),
-                ("fill_nan", FillNanTransformer()),
+                ("fill_nan", FillNanTransformer(config=FILLNA_CONFIG)),
                 ("resampler", TimeResampler()),
             ]
         )
         set_config(transform_output="pandas")
-        
+
         data = common_pipeline.transform(data)
         return data
 
@@ -86,7 +91,7 @@ class MarkDataTransformer(BaseTransformer):
         Returns:
             pd.Series: Mask of labels according to manual labeling config.
         """
-        
+
         # TODO: Set here your mask of labels
         mask = pd.Series(0, index=data.index)
         return mask
