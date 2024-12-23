@@ -4,7 +4,7 @@ import gc
 from glob import glob
 import logging
 from pathlib import Path
-from typing import Dict, List, Union, TYPE_CHECKING
+from typing import Dict, List, Union
 import warnings
 
 from clearml import Dataset, Task
@@ -16,6 +16,7 @@ from common.exceptions import (
     DatasetDownloadError,
     PipelineExecutionError,
 )
+from common.features import GROUP_ID
 from common.pipeline_steps import (
     PLOTTING,
     SPLIT_DATASET,
@@ -30,32 +31,25 @@ from utilities.utils import (
 )
 from utilities.path_utils import get_last_modified
 
-if TYPE_CHECKING:
-    from settings import Settings
-
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 class PlottingPipelineStep(BasePipelineStep):
-    def __init__(
-        self,
-        settings: 'Settings'
-    ):
-        self.pipeline_step = PLOTTING
-        super().__init__(settings, self.pipeline_step)
-        
-    @property 
+    def __init__(self):
+        super().__init__(PLOTTING)
+
+    @property
     def _input_files(self) -> List[Path]:
         return []
-    
+
     def _get_data(self, path: Union[Path, str]) -> pd.DataFrame:
         file_path = get_last_modified(path=path, suffixes=GENERAL_EXTENSION)
         data = PickleLoader(path=file_path).load()
         return data
-    
+
     def _upload_artifacts(self) -> None:
         pass
-    
+
     def _get_groups_mapping(self) -> Dict[str, int]:
         artifacts_task = Task.get_task(
             project_name=self.settings.clearml.project,
@@ -64,26 +58,26 @@ class PlottingPipelineStep(BasePipelineStep):
         )
         groups_mapping = artifacts_task.artifacts['groups_mapping'].get()
         return groups_mapping
-    
+
     def _download_preprocessed_dataset(self) -> None:
         if is_empty_dir(self.settings.storage.processed_folder):
             try:
                 self.remote_dataset = Dataset.get(
                     dataset_project=self.settings.clearml.project,
                     dataset_name=f"{self.settings.clearml.project} {PREPROCESS.name} output dataset",
-                    
+
                 )
             except ValueError:
                 raise DatasetDownloadError
-            
+
             _ = Path(
                     self.remote_dataset.get_mutable_local_copy(
                     self.settings.storage.processed_folder,
                     )
                 )
-            
+
     def _get_processed_data(self) -> pd.DataFrame:
-        groups = list(self.prediction["GROUP_ID"].unique().astype(int))  
+        groups = list(self.prediction[GROUP_ID.name].unique().astype(int))
         self.groups_mapping = invert_dict(self._get_groups_mapping())
         self._download_preprocessed_dataset()
         processed = pd.DataFrame()
@@ -97,19 +91,19 @@ class PlottingPipelineStep(BasePipelineStep):
                 )
                 data = PickleLoader(path=preprocessed_filepath).load()
                 processed = pd.concat([processed, data])
-                
+
                 del data
                 gc.collect()
             else:
-                raise PipelineExecutionError 
-            
+                raise PipelineExecutionError
+
         return processed
-    
+
     def _create_plot(self):
-        groups = list(self.processed["GROUP_ID"].unique().astype(int))  
+        groups = list(self.processed[GROUP_ID.name].unique().astype(int))
         for group in tqdm(groups, total=len(groups)):
             file_name = self.groups_mapping.get(group)
-            mask = self.processed["GROUP_ID"] == group
+            mask = self.processed[GROUP_ID.name] == group
             ldf = self.processed[mask].copy()
             splitted_ldf = split_dataframe(ldf)
 
@@ -121,22 +115,21 @@ class PlottingPipelineStep(BasePipelineStep):
                     title=file_name,
                 )
                 _ = plotter.plot()
-    
+
     def _process_data(self) -> None:
         self.prediction = self._get_data(self._input_directory)
         self.processed = self._get_processed_data()
         self.processed = pd.concat([self.processed, self.prediction], axis="columns")
         self._create_plot()
-        
-        
 
-  
-  
-  
-  
-  
-        
-        
-        
 
-                
+
+
+
+
+
+
+
+
+
+

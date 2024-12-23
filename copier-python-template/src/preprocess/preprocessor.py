@@ -12,6 +12,7 @@ from common.config import (
     FILLNA_CONFIG,
     CLIP_CONFIG,
 )
+from common.features import TARGET
 from utilities.transformers import (
     DuplicatedColumnsTransformer,
     ColumnsTypeTransformer,
@@ -77,9 +78,9 @@ class MarkDataTransformer(BaseTransformer):
 
         """
         mask = self._get_mask(data)
-        data['TARGET'] = 0
-        data.loc[mask, 'TARGET'] = 1
-        data['TARGET'] = data['TARGET'].astype("int16")
+        data[TARGET.name] = 0
+        data.loc[mask, TARGET.name] = 1
+        data[TARGET.name] = data[TARGET.name].astype("int16")
         return data
 
     def _get_mask(self, data: pd.DataFrame) -> pd.Series:

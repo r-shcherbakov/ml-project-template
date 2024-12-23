@@ -54,9 +54,30 @@ FEATURE_3 = Feature(
     upper=1000,
     fillna_value=0,
 )
+GROUP_ID = Feature(
+    name="GROUP_ID",
+    dtype="int32",
+)
+TARGET = Feature(
+    name="target",
+)
+DISCRETE_PREDICTION = Feature(
+    name="discrete_prediction",
+    dtype="int8",
+    lower=0,
+    upper=1,
+    fillna_value=0,
+)
+PROBABILITY_PREDICTION = Feature(
+    name="probability_prediction",
+    dtype="float32",
+    lower=0,
+    upper=1,
+    fillna_value=0,
+)
 
 
-IGNORED_FEATURES = [FEATURE_1]
+IGNORED_FEATURES = [GROUP_ID]
 MANDATORY_FEATURES = [
     FEATURE_1,
     FEATURE_2,

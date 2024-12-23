@@ -19,10 +19,10 @@ class PipelineStep:
 
     def __str__(self):
         return self.name
-    
-    
-PRE_RUN = PipelineStep(
-    name="pre_run",
+
+
+PRERUN = PipelineStep(
+    name="prerun",
     task_type=TaskTypes.service.name,
     input_directory=storage_settings.raw_folder,
 )
@@ -66,5 +66,5 @@ HYPERPARAMETER_OPTIMIZATION = PipelineStep(
 )
 POST_RUN = PipelineStep(
     name="post_run",
-    task_type=TaskTypes.service.name 
+    task_type=TaskTypes.service.name
 )
