@@ -1,96 +1,161 @@
-from clearml.automation import PipelineController
+import os
+from pathlib import Path
+from typing import Tuple, TYPE_CHECKING
 
+from clearml import PipelineController, Dataset
+import pandas as pd
+
+from common.exceptions import PipelineExecutionError
 from common.pipeline_steps import (
-    PREPROCESS, 
-    FEATURE_ENGINEER, 
-    SPLIT_DATASET, 
-    TRAIN, 
-    PLOTTING, 
+    PRERUN,
+    PREPROCESS,
+    FEATURE_ENGINEER,
+    SPLIT_DATASET,
+    TRAIN,
 )
-from settings import ClearmlSettings
-
-settings = ClearmlSettings()
-
-
-def post_execute_callback(
-    a_pipeline: PipelineController, 
-    a_node: PipelineController.Node
-) -> None:
-    print('Completed Task id={}'.format(a_node.executed))
-    
-    
-# Connecting ClearML with the current pipeline,
-# from here on everything is logged automatically
-pipe = PipelineController(
-    name=f'{settings.project} tasks pipeline', 
-    project=settings.project, 
-    version='0.0.1',
-    add_pipeline_tags=False,
-    retry_on_failure=3,
-    auto_version_bump=True,
+from features import (
+    FeatureEngineerPipelineStep,
+    SplitDatasetPipelineStep,
 )
+from preprocess import PreprocessPipelineStep
+from train import TrainPipelineStep
+from settings import SETTINGS
+from utilities.path_utils import is_empty_dir
 
-pipe.add_step(
-    name=PREPROCESS.name,
-    base_task_project=settings.project,
-    base_task_name=f'{PREPROCESS.name} task',
-    cache_executed_step=True,
-    post_execute_callback=post_execute_callback,
-    retry_on_failure=2,
-)
+if TYPE_CHECKING:
+    from features.feature_engineer import FeatureEngineer
 
-pipe.add_step(
-    name=SPLIT_DATASET.name,
-    parents=[PREPROCESS.name],
-    base_task_project=settings.project,
-    base_task_name=f'{SPLIT_DATASET.name} task',
-    parameter_override={
-        "General/input_dataset_id": "${preprocess.parameters.General/output_dataset_id}",
-    },
-    cache_executed_step=True,
-    post_execute_callback=post_execute_callback,
-)
 
-pipe.add_step(
-    name=FEATURE_ENGINEER.name,
-    parents=[SPLIT_DATASET.name],
-    base_task_project=settings.project,
-    base_task_name=f'{FEATURE_ENGINEER.name} task',
-    parameter_override={
-        "General/input_dataset_id": "${split_dataset.parameters.General/output_dataset_id}",
-    },
-    cache_executed_step=True,
-    post_execute_callback=post_execute_callback,
-    retry_on_failure=1,
-)
+def run_prerun_step() -> str:
+    if not is_empty_dir(SETTINGS.storage.raw_folder):
+        try:
+            # Upload raw data from remote storage
+            pass
+        except Exception:
+            raise PipelineExecutionError("Raw data is not available")
 
-pipe.add_step(
-    name=TRAIN.name,
-    parents=[FEATURE_ENGINEER.name],
-    base_task_project=settings.project,
-    base_task_name=f'{TRAIN.name} task',
-    parameter_override={
-        "General/input_dataset_id": "${feature_engineer.parameters.General/output_dataset_id}",
-    },
-    cache_executed_step=True,
-    post_execute_callback=post_execute_callback,
-)
+        # Save local copy of raw data as ClearML Dataset at remote
+        remote_dataset = Dataset.create(
+            dataset_project=SETTINGS.clearml.project,
+            dataset_name="raw data",
+            dataset_tags=SETTINGS.clearml.tags,
+        )
+        remote_dataset.add_files(path=SETTINGS.storage.raw_folder)
+        remote_dataset.finalize(auto_upload=True)
 
-pipe.add_step(
-    name=PLOTTING.name,
-    parents=[TRAIN.name],
-    base_task_project=settings.project,
-    base_task_name=f'{PLOTTING.name} task',
-    cache_executed_step=True,
-    post_execute_callback=post_execute_callback,
-)
+        return remote_dataset.id
 
-pipe.set_default_execution_queue(settings.queue_name)
-if settings.execute_remotely:
-    # Starting the pipeline (in the background)
-    pipe.start()
-else:
-    # for debugging purposes use local jobs
-    pipe.start_locally(run_pipeline_steps_locally=True)
 
-print("Pipeline successfully finished")
+def run_preprocess_step(dataset_id: str) -> str:
+    return PreprocessPipelineStep().start(dataset_id=dataset_id)
+
+
+def run_split_dataset_step(dataset_id: str) -> str:
+    return SplitDatasetPipelineStep().start(dataset_id=dataset_id)
+
+
+def run_feature_engineer_step(dataset_id: str) -> Tuple['FeatureEngineer', str]:
+    return FeatureEngineerPipelineStep.start(dataset_id=dataset_id)
+
+
+def run_train_step(dataset_id: str) -> None:
+    return TrainPipelineStep.start(dataset_id=dataset_id)
+
+
+if __name__ == '__main__':
+
+    pipe = PipelineController(
+        name=f'{SETTINGS.clearml.project} pipeline',
+        project=SETTINGS.clearml.project,
+        add_pipeline_tags=False,
+    )
+
+    pipe.add_function_step(
+        name=PRERUN.name,
+        task_type=PRERUN.task_type,
+        function=run_prerun_step,
+        function_return=['dataset_id'],
+        cache_executed_step=True,
+        continue_behaviour=dict(
+            continue_on_fail=False,
+            continue_on_abort=False,
+        ),
+        time_limit=SETTINGS.clearml.time_limit,
+    )
+
+    pipe.add_function_step(
+        name=PREPROCESS.name,
+        task_type=PREPROCESS.task_type,
+        parents=[PRERUN.name],
+        function=run_preprocess_step,
+        function_kwargs=dict(
+            dataset_id='${prerun.dataset_id}'
+        ),
+        function_return=['dataset_id'],
+        cache_executed_step=True,
+        continue_behaviour=dict(
+            continue_on_fail=False,
+            continue_on_abort=False,
+        ),
+        time_limit=SETTINGS.clearml.time_limit,
+    )
+
+    pipe.add_function_step(
+        name=SPLIT_DATASET.name,
+        task_type=SPLIT_DATASET.task_type,
+        parents=[PREPROCESS.name],
+        function=run_split_dataset_step,
+        function_kwargs=dict(
+            dataset_id='${preprocess.dataset_id}'
+        ),
+        function_return=['dataset_id'],
+        cache_executed_step=True,
+        continue_behaviour=dict(
+            continue_on_fail=False,
+            continue_on_abort=False,
+        ),
+        time_limit=SETTINGS.clearml.time_limit,
+    )
+
+    pipe.add_function_step(
+        name=FEATURE_ENGINEER.name,
+        task_type=FEATURE_ENGINEER.task_type,
+        parents=[SPLIT_DATASET.name],
+        function=run_feature_engineer_step,
+        function_kwargs=dict(
+            dataset_id='${split_dataset.dataset_id}',
+        ),
+        function_return=['feature_engineer', 'dataset_id'],
+        cache_executed_step=True,
+        continue_behaviour=dict(
+            continue_on_fail=False,
+            continue_on_abort=False,
+        ),
+        time_limit=SETTINGS.clearml.time_limit,
+    )
+
+    pipe.add_function_step(
+        name=TRAIN.name,
+        task_type=TRAIN.task_type,
+        parents=[FEATURE_ENGINEER.name],
+        function=run_train_step,
+        function_kwargs=dict(
+            dataset_id='${feature_engineer.dataset_id}',
+        ),
+        cache_executed_step=True,
+        continue_behaviour=dict(
+            continue_on_fail=False,
+            continue_on_abort=False,
+        ),
+        time_limit=SETTINGS.clearml.time_limit,
+    )
+
+    pipe.set_default_execution_queue(SETTINGS.clearml.queue_name)
+    if SETTINGS.clearml.execute_remotely:
+        # Starting the pipeline (in the background)
+        pipe.start(queue=SETTINGS.clearml.queue_name)
+    else:
+        # for debugging purposes use local jobs
+        pipe.start_locally(run_pipeline_steps_locally=True)
+
+    print("Pipeline finished")

@@ -9,7 +9,7 @@ repository = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package
 documentation = "{{ repository_provider }}/{{ project_namespace }}/repos/{{ package_name_py }}/docs"
 readme = "README.md"
 include = ["LICENSE"]
-packages = [{ include = "{{project_name}}", from = "src" }]
+packages = [{ include = "{{package_name_py}}", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "{{ python_version }}"
@@ -19,13 +19,17 @@ clearml = "*"
 numpy = "*"
 pandas = "*"
 parallelbar = "*"
+pyarrow = "*"
 pydantic = "*"
 pydantic-settings = "*"
-pyod = "*"
 pyyaml = "*"
+pywavelets = "*"
+scikit-learn = "*"
 tqdm = "*"
 
 [tool.poetry.dev-dependencies]
+jupyter = "*"
+ipykernel = "*"
 black = "*"
 flakehell = "*"
 isort = "*"
