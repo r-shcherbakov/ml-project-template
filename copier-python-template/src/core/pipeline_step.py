@@ -10,17 +10,17 @@ from clearml import Task, Dataset
 import pandas as pd
 import yaml
 
-from common.exceptions import (
+from src.common.exceptions import (
     DatasetDownloadError,
     PipelineExecutionError,
 )
-from utilities.utils import compress_pickle
-from utilities.path_utils import is_empty_dir
-from settings import SETTINGS
+from src.utilities.utils import compress_pickle
+from src.utilities.path_utils import is_empty_dir
+from src.settings import SETTINGS
 
 if TYPE_CHECKING:
-    from common.pipeline_steps import PipelineStep
-    from settings import Settings
+    from src.common.pipeline_steps import PipelineStep
+    from src.settings import Settings
 
 
 class BasePipelineStep(ABC):
@@ -103,6 +103,32 @@ class BasePipelineStep(ABC):
             print_console=False,
         )
 
+    def _log_success_save_data(
+        self,
+        file_name: str,
+    ) -> None:
+        self.task.logger.report_text(
+            f"Data of {self.pipeline_step.name.replace('_', ' ')} step "
+            f"for {file_name} successfully locally saved",
+            level=logging.INFO
+        )
+
+    def _log_failed_save_data(
+        self,
+        file_name: str,
+        exception: Exception,
+    ) -> None:
+        self.task.logger.report_text(
+            f"Savings data of {self.pipeline_step.name.replace('_', ' ')} step "
+            f"for {file_name} failed due to: {exception}",
+            level=logging.INFO
+        )
+        self.task.logger.report_text(
+            'traceback:' + traceback.format_exc(),
+            level=logging.DEBUG,
+            print_console=False,
+        )
+
     def _download_input_dataset(self, dataset_id: str) -> None:
         remote_dataset = Dataset.get(
             dataset_id=dataset_id,
@@ -120,7 +146,7 @@ class BasePipelineStep(ABC):
             dataset_project=self.settings.clearml.project,
             dataset_name=f"{self.pipeline_step.name.replace('_', ' ')} dataset",
             dataset_tags=self.settings.clearml.tags,
-            parent_datasets=[parent_datasets],
+            parent_datasets=parent_datasets,
         )
         try:
             dataset.add_files(path=self._output_directory)
@@ -139,7 +165,7 @@ class BasePipelineStep(ABC):
         data: pd.DataFrame,
     ) -> None:
         try:
-            file_name = compress_pickle(path, data).name
+            file_name = compress_pickle(path, data).stem
             self._log_success_save_data(file_name=file_name)
         except Exception as exception:
             self._log_failed_save_data(

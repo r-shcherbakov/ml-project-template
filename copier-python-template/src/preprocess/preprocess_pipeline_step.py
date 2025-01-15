@@ -10,12 +10,12 @@ import warnings
 from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
-from common.constants import GENERAL_EXTENSION
-from common.pipeline_steps import PREPROCESS
-from core import BasePipelineStep
-from utilities.loaders import CsvLoader
-from utilities.path_utils import is_empty_dir
-from preprocess.preprocessor import Preprocessor, MarkDataTransformer
+from src.common.constants import GENERAL_EXTENSION
+from src.common.pipeline_steps import PREPROCESS
+from src.core import BasePipelineStep
+from src.utilities.loaders import CsvLoader
+from src.utilities.path_utils import is_empty_dir
+from src.preprocess.preprocessor import Preprocessor, MarkDataTransformer
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 

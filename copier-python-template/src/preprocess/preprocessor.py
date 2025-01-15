@@ -6,14 +6,14 @@ import pandas as pd
 from sklearn import set_config
 from sklearn.pipeline import Pipeline
 
-from core import BaseTransformer
-from common.config import (
+from src.core import BaseTransformer
+from src.common.config import (
     FEATYPE_TYPES,
     FILLNA_CONFIG,
     CLIP_CONFIG,
 )
-from common.features import TARGET
-from utilities.transformers import (
+from src.common.features import TARGET
+from src.utilities.transformers import (
     DuplicatedColumnsTransformer,
     ColumnsTypeTransformer,
     ClipTransformer,

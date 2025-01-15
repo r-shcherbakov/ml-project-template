@@ -3,10 +3,12 @@ from typing import Optional, Union
 from pathlib import Path
 
 from clearml import TaskTypes
-from settings import StorageSettings, ArtifactsSettings
+
+from src.settings import StorageSettings, ArtifactsSettings
 
 storage_settings = StorageSettings()
 artifacts_settings = ArtifactsSettings()
+
 
 @dataclass(frozen=True)
 class PipelineStep:
@@ -64,7 +66,7 @@ HYPERPARAMETER_OPTIMIZATION = PipelineStep(
     name="hyperparameter_optimization",
     task_type=TaskTypes.optimizer.name
 )
-POST_RUN = PipelineStep(
-    name="post_run",
+POSTRUN = PipelineStep(
+    name="postrun",
     task_type=TaskTypes.service.name
 )

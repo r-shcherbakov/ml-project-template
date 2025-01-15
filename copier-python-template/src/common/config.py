@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Dict, Union, Optional
 
-from common.features import MANDATORY_FEATURES
+from src.common.features import MANDATORY_FEATURES
 
 
 FEATYPE_TYPES: Dict[str, str] = {feature.name: feature.dtype for feature in MANDATORY_FEATURES}

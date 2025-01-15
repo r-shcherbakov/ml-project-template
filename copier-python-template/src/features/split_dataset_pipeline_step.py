@@ -11,13 +11,13 @@ import warnings
 import pandas as pd
 from tqdm import tqdm
 
-from common.constants import GENERAL_EXTENSION
-from common.exceptions import PipelineExecutionError
-from common.features import GROUP_ID
-from common.pipeline_steps import SPLIT_DATASET
-from core import BasePipelineStep
-from utilities.loaders import PickleLoader
-from utilities.path_utils import is_empty_dir
+from src.common.constants import GENERAL_EXTENSION
+from src.common.exceptions import PipelineExecutionError
+from src.common.features import GROUP_ID
+from src.common.pipeline_steps import SPLIT_DATASET
+from src.core import BasePipelineStep
+from src.utilities.loaders import PickleLoader
+from src.utilities.path_utils import is_empty_dir
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
