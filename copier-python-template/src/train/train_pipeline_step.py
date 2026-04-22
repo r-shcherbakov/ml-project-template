@@ -11,25 +11,24 @@ from catboost import (
     CatBoostClassifier,
     eval_metric
 )
-from clearml import OutputModel
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold
 from tqdm import tqdm
 
-from core import BasePipelineStep
-from common.exceptions import PipelineExecutionError
-from common.pipeline_steps import TRAIN
-from common.constants import GENERAL_EXTENSION
-from common.features import (
+from src.core import BasePipelineStep
+from src.common.exceptions import PipelineExecutionError
+from src.common.pipeline_steps import TRAIN
+from src.common.constants import GENERAL_EXTENSION
+from src.common.features import (
     GROUP_ID,
     IGNORED_FEATURES,
     TARGET,
     DISCRETE_PREDICTION,
     PROBABILITY_PREDICTION
 )
-from utilities.loaders import PickleLoader
-from utilities.path_utils import is_empty_dir
+from src.utilities.loaders import PickleLoader
+from src.utilities.path_utils import is_empty_dir
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -145,10 +144,6 @@ class TrainPipelineStep(BasePipelineStep):
             fitted_model_filepath,
             format="cbm"
         )
-
-        self.output_model = OutputModel(task=self.task)
-        self.output_model.update_labels(train_pool.get_label())
-        self.output_model.update_weights(weights_filename=fitted_model_filepath)
 
     def _get_prediction(self) -> pd.DataFrame:
         # Get prediction with fitted models

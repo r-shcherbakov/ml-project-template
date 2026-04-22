@@ -5,25 +5,25 @@ from typing import Tuple, TYPE_CHECKING
 from clearml import PipelineController, Dataset
 import pandas as pd
 
-from common.exceptions import PipelineExecutionError
-from common.pipeline_steps import (
+from src.common.exceptions import PipelineExecutionError
+from src.common.pipeline_steps import (
     PRERUN,
     PREPROCESS,
     FEATURE_ENGINEER,
     SPLIT_DATASET,
     TRAIN,
 )
-from features import (
+from src.features import (
     FeatureEngineerPipelineStep,
     SplitDatasetPipelineStep,
 )
-from preprocess import PreprocessPipelineStep
-from train import TrainPipelineStep
-from settings import SETTINGS
-from utilities.path_utils import is_empty_dir
+from src.preprocess import PreprocessPipelineStep
+from src.train import TrainPipelineStep
+from src.settings import SETTINGS
+from src.utilities.path_utils import is_empty_dir
 
 if TYPE_CHECKING:
-    from features.feature_engineer import FeatureEngineer
+    from src.features.feature_engineer import FeatureEngineer
 
 
 def run_prerun_step() -> str:
@@ -67,7 +67,11 @@ if __name__ == '__main__':
     pipe = PipelineController(
         name=f'{SETTINGS.clearml.project} pipeline',
         project=SETTINGS.clearml.project,
+        target_project=SETTINGS.clearml.project,
         add_pipeline_tags=False,
+        auto_version_bump=True,
+        add_run_number=False,
+        packages="./requirements.txt",
     )
 
     pipe.add_function_step(
