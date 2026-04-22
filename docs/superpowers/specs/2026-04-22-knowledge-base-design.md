@@ -67,7 +67,7 @@ Bullet list: verify these before making changes.
 - `dataset_id: str` is the **only** data transfer mechanism between steps
 - Every `BasePipelineStep.start()` must return `str` (the output dataset_id)
 - Steps must never read files from a sibling step's directory directly — always via ClearML Dataset download
-- Pipeline step order is a DAG; no cycles, no skipping steps
+- Pipeline step order is a DAG; no cycles. Steps are optional — any step can be omitted from `pipeline.py` entirely. What cannot be skipped is the parent→child ordering: if a step is included, all steps it depends on via `parents=[...]` must also be included and must complete successfully before it runs.
 
 ### `architecture/clearml-contract.md`
 - `deferred_init=True` in `Task.init()` — must not be removed (prevents premature task registration)
