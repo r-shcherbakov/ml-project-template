@@ -10,7 +10,6 @@ import numpy as np
 from pydantic import (
     BaseModel,
     DirectoryPath,
-    FilePath,
     Field,
     computed_field,
     field_validator
@@ -133,10 +132,6 @@ class LoggingSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    params_path: FilePath = Field(
-        os.path.join(Path(__file__).resolve().parent, 'params.yaml'),
-        description='Path to the experiment parameters config'
-    )
     random_seed: int = Field(42, description='Seed for equivalent experiment results')
 
     clearml: ClearmlSettings = Field(default_factory=ClearmlSettings)

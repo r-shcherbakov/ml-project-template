@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import warnings
 
 import pandas as pd
+from pydantic import BaseModel
 from tqdm import tqdm
 
 from src.common.constants import GENERAL_EXTENSION
@@ -22,9 +23,15 @@ from src.utilities.path_utils import is_empty_dir
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
+class SplitDatasetParams(BaseModel):
+    split_test: bool = True
+    num_test_objects: int = 2
+    test_objects: Optional[List[str]] = None
+
+
 class SplitDatasetPipelineStep(BasePipelineStep):
-    def __init__(self):
-        super().__init__(SPLIT_DATASET)
+    def __init__(self, params: SplitDatasetParams):
+        super().__init__(SPLIT_DATASET, params=params)
 
     @property
     def _input_files(self) -> List[Path]:
@@ -37,26 +44,23 @@ class SplitDatasetPipelineStep(BasePipelineStep):
         return input_filepath_files
 
     def _set_test_objects(self) -> None:
-        split_test = self.step_params.get('split_test', False)
-        if split_test:
-            self.test_objects: Optional[List[str]] = self.step_params.get("test_objects", None)
-            if not self.test_objects:
-                # Set required train test split method
-                num_test_objects = self.step_params.get("num_test_objects", 1)
-                self.test_objects = [
-                    Path(file_path).stem \
-                    for file_path in random.sample(self._input_files, num_test_objects)
-                ]
-                self.step_params["test_objects"] = self.test_objects
+        if self.step_params.split_test:
+            if self.step_params.test_objects:
+                self.test_objects: List[str] = self.step_params.test_objects
             else:
-                self.step_params["test_objects"] = self.test_objects
+                self.test_objects = [
+                    Path(file_path).stem
+                    for file_path in random.sample(
+                        self._input_files, self.step_params.num_test_objects
+                    )
+                ]
         else:
             self.test_objects = []
 
     def _log_groups_mapping(self) -> None:
         self.file_name_mapping: Dict[str, int] = {
-            Path(file_path).stem.replace(" ", "").upper(): number \
-                for number, file_path in enumerate(self._input_files)
+            Path(file_path).stem.replace(" ", "").upper(): number
+            for number, file_path in enumerate(self._input_files)
         }
         self.task.upload_artifact("group_mapping", self.file_name_mapping)
 
@@ -94,7 +98,7 @@ class SplitDatasetPipelineStep(BasePipelineStep):
             data=train,
         )
 
-        if self.step_params.get('split_test', False) and not test.empty:
+        if self.step_params.split_test and not test.empty:
             self._save_locally_data(
                 path=Path(os.path.join(self._output_directory, f"test{GENERAL_EXTENSION}")),
                 data=test,
@@ -109,4 +113,3 @@ class SplitDatasetPipelineStep(BasePipelineStep):
         self._concatenate_dataframes()
 
         return self._upload_output_dataset(parent_datasets=[dataset_id])
-

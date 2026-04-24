@@ -1,3 +1,6 @@
+.worktrees/
 megalinter-reports/
 report/
 .pre-commit-trivv-cache
+._*
+  .DS_Store

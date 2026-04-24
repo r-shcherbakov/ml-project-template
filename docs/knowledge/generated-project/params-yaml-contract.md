@@ -1,61 +1,63 @@
-# params.yaml Contract
+# Pipeline Step Parameters Contract
 
 ## Context
 
-`src/params.yaml` is the single file for all pipeline step parameters.
-`BasePipelineStep._init_parameters()` reads it automatically on step
-initialization and connects the matching section to the ClearML task —
-making parameters visible and editable in the ClearML UI without code changes.
-Parameters can then be overridden in ClearML UI for remote runs.
+Each pipeline step that has configurable parameters defines a `XxxParams(BaseModel)`
+class in the **same file** as the step class. Parameters are passed as a **required**
+constructor argument — there is no default. `BasePipelineStep._connect_params()` calls
+`task.connect(params.model_dump())` to make parameters visible and editable in the
+ClearML UI without code changes.
 
 ## Invariants
 
-1. The top-level key in `params.yaml` must **exactly** match `PipelineStep.name` (case-sensitive, underscores preserved).
-2. `common` is a reserved top-level key — its contents are connected to every task as the "common" parameter group. Use it only for truly cross-step parameters.
-3. A missing step key results in `self.step_params = None` — no error is raised, but the step has no ClearML parameter binding.
-4. All parameter values must be YAML-serializable primitives: `str`, `int`, `float`, `bool`, `list`, `dict`.
-5. Never read `params.yaml` directly in step code — always use `self.step_params` (already loaded in `_init_parameters()`).
+1. `XxxParams` inherits from `pydantic.BaseModel` and lives in the same file as its step.
+2. `params` is a **required** constructor argument — `XxxStep()` with no args raises `TypeError`.
+3. `pipeline.py` always instantiates params explicitly (never relying on defaults alone).
+4. `self.step_params` is always a typed `XxxParams` instance (or `None` for param-free steps).
+5. `task.connect()` receives `self.step_params.model_dump()` — ClearML UI override behaviour is unchanged.
+6. Never mutate `self.step_params` after init — use instance variables for runtime-computed values.
 
 ## How It Works
 
-```yaml
-# src/params.yaml structure
-common:              # ← connected to ALL tasks as "common" parameter group
-  mandatory_features:
-    - target
-  forbidden_features:
-    - GROUP_ID
-
-preprocess:          # ← PipelineStep.name = "preprocess" → self.step_params
-  skip_mark: False   #    access: self.step_params.get("skip_mark", True)
-
-feature_engineer:    # ← PipelineStep.name = "feature_engineer"
-  some_int_parameter: 1
-
-train:
-  skip_cv: True
-  n_splits: 4
-  train_final_model: True
-```
-
-In `BasePipelineStep._init_parameters()`:
 ```python
-with open(self.settings.params_path) as file:
-    params = yaml.load(file, Loader=yaml.Loader)
-    self.common_params = params.get('common', None)
-    self.step_params = params.get(self.pipeline_step.name, None)  # key = PipelineStep.name
+# src/preprocess/preprocess_pipeline_step.py
+class PreprocessParams(BaseModel):
+    skip_mark: bool = False          # typed, IDE-complete, validated
 
-if self.common_params:
-    self.task.connect(self.common_params, name="common")
-if self.step_params:
-    self.task.connect(self.step_params, name=self.pipeline_step.name)
+class PreprocessPipelineStep(BasePipelineStep):
+    def __init__(self, params: PreprocessParams):
+        super().__init__(PREPROCESS, params=params)
+
+    def start(self, dataset_id: str) -> str:
+        if self.step_params.skip_mark:   # attribute access, not dict .get()
+            ...
 ```
+
+```python
+# src/pipelines/pipeline.py
+def run_preprocess_step(dataset_id: str) -> str:
+    return PreprocessPipelineStep(
+        params=PreprocessParams(skip_mark=False),
+    ).start(dataset_id=dataset_id)
+```
+
+## Steps without parameters
+
+Steps that need no parameters (e.g. `FeatureEngineerPipelineStep`) simply omit `params`:
+
+```python
+class FeatureEngineerPipelineStep(BasePipelineStep):
+    def __init__(self):
+        super().__init__(FEATURE_ENGINEER)   # params defaults to None
+```
+
+`_connect_params()` is a no-op when `self.step_params is None`.
 
 ## Agent Checklist
 
 Before adding or modifying parameters:
-- [ ] Is the top-level key identical to `PipelineStep.name`?
-- [ ] Is `common` used only for parameters needed by multiple steps?
-- [ ] Are all values YAML-serializable primitives?
-- [ ] Is `self.step_params` used in step code (not direct `yaml.load()` calls)?
-- [ ] If a step has no parameters, is omitting its key acceptable (results in `self.step_params = None`)?
+- [ ] Is `XxxParams(BaseModel)` defined in the same file as the step?
+- [ ] Is `params` a required constructor argument (no default)?
+- [ ] Does `pipeline.py` pass params explicitly at the call site?
+- [ ] Does step code use `self.step_params.field_name` (not `.get()`)?
+- [ ] Are runtime-computed values stored as instance vars (not mutating `self.step_params`)?

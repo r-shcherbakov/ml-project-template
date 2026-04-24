@@ -17,8 +17,11 @@ from src.features import (
     FeatureEngineerPipelineStep,
     SplitDatasetPipelineStep,
 )
+from src.features.split_dataset_pipeline_step import SplitDatasetParams
 from src.preprocess import PreprocessPipelineStep
+from src.preprocess.preprocess_pipeline_step import PreprocessParams
 from src.train import TrainPipelineStep
+from src.train.train_pipeline_step import TrainParams
 from src.settings import SETTINGS
 from src.utilities.path_utils import is_empty_dir
 
@@ -34,7 +37,6 @@ def run_prerun_step() -> str:
         except Exception:
             raise PipelineExecutionError("Raw data is not available")
 
-        # Save local copy of raw data as ClearML Dataset at remote
         remote_dataset = Dataset.create(
             dataset_project=SETTINGS.clearml.project,
             dataset_name="raw data",
@@ -47,11 +49,18 @@ def run_prerun_step() -> str:
 
 
 def run_preprocess_step(dataset_id: str) -> str:
-    return PreprocessPipelineStep().start(dataset_id=dataset_id)
+    return PreprocessPipelineStep(
+        params=PreprocessParams(skip_mark=False),
+    ).start(dataset_id=dataset_id)
 
 
 def run_split_dataset_step(dataset_id: str) -> str:
-    return SplitDatasetPipelineStep().start(dataset_id=dataset_id)
+    return SplitDatasetPipelineStep(
+        params=SplitDatasetParams(
+            split_test=True,
+            num_test_objects=2,
+        ),
+    ).start(dataset_id=dataset_id)
 
 
 def run_feature_engineer_step(dataset_id: str) -> Tuple['FeatureEngineer', str]:
@@ -59,7 +68,14 @@ def run_feature_engineer_step(dataset_id: str) -> Tuple['FeatureEngineer', str]:
 
 
 def run_train_step(dataset_id: str) -> None:
-    return TrainPipelineStep.start(dataset_id=dataset_id)
+    return TrainPipelineStep(
+        params=TrainParams(
+            skip_cv=True,
+            n_splits=4,
+            train_final_model=True,
+            binary_threshold=0.5,
+        ),
+    ).start(dataset_id=dataset_id)
 
 
 if __name__ == '__main__':
@@ -156,10 +172,8 @@ if __name__ == '__main__':
 
     pipe.set_default_execution_queue(SETTINGS.clearml.queue_name)
     if SETTINGS.clearml.execute_remotely:
-        # Starting the pipeline (in the background)
         pipe.start(queue=SETTINGS.clearml.queue_name)
     else:
-        # for debugging purposes use local jobs
         pipe.start_locally(run_pipeline_steps_locally=True)
 
     print("Pipeline finished")
