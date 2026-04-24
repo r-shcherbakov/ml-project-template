@@ -184,12 +184,16 @@ class ObjectStorageSettings(BaseModel):
     bucket: str         # required
     access_key: str     # required
     secret_key: str     # required
-    raw_prefix: str     # required — S3 path to raw Excel files
 
 class StorageSettings(BaseModel):
-    # existing fields preserved
-    labeling_config_prefix: str = "configs/labeling"
-    # full path: {labeling_config_prefix}/{accident_type}.yaml
+    # existing fields preserved (including raw_folder — S3 path to raw Excel files)
+
+    @computed_field(description="Path to the labels")
+    def labels_folder(self) -> Path:
+        directory = Path(os.path.join(self.root_folder, "labels"))
+        directory.mkdir(exist_ok=True, parents=True)
+        return directory
+    # full labeling config path: {labels_folder}/{accident_type}.yaml
 
 class ClearmlSettings(BaseModel):
     # existing fields preserved
@@ -204,8 +208,8 @@ class Settings(BaseSettings):
     accident_type: str           # required — drives labeling config path
 
     @property
-    def labeling_config_path(self) -> str:
-        return f"{self.storage.labeling_config_prefix}/{self.accident_type}.yaml"
+    def labeling_config_path(self) -> Path:
+        return self.storage.labels_folder / f"{self.accident_type}.yaml"
 ```
 
 `.env` example:
@@ -214,7 +218,6 @@ OBJECT_STORAGE__ENDPOINT=http://minio:9000
 OBJECT_STORAGE__BUCKET=ml-data
 OBJECT_STORAGE__ACCESS_KEY=minioadmin
 OBJECT_STORAGE__SECRET_KEY=minioadmin
-OBJECT_STORAGE__RAW_PREFIX=drilling/raw/
 
 CLEARML__PREPROCESS_QUEUE=preprocess-workers
 CLEARML__FEATURE_ENGINEER_QUEUE=feature-engineer-workers
