@@ -162,6 +162,7 @@ class BasePipelineStep(ABC):
         path: Union[str, Path],
         data: pd.DataFrame,
     ) -> None:
+        file_name = Path(path).stem
         try:
             file_name = compress_pickle(path, data).stem
             self._log_success_save_data(file_name=file_name)
