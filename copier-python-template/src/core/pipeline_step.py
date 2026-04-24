@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 import logging
 from pathlib import Path
 import traceback
-from typing import Any, Dict, Optional, Union, TYPE_CHECKING
+from typing import Optional, Union, TYPE_CHECKING
 
 from clearml import Task, Dataset
 import pandas as pd
-import yaml
+from pydantic import BaseModel
 
 from src.common.exceptions import (
     DatasetDownloadError,
@@ -29,12 +29,14 @@ class BasePipelineStep(ABC):
     def __init__(
         self,
         pipeline_step: 'PipelineStep',
+        params: Optional[BaseModel] = None,
     ):
         self.pipeline_step: 'PipelineStep' = pipeline_step
         self.settings: 'Settings' = SETTINGS
+        self.step_params = params
 
         self._init_task()
-        self._init_parameters()
+        self._connect_params()
 
     def _init_task(self):
         self.task: Task = Task.init(
@@ -47,15 +49,12 @@ class BasePipelineStep(ABC):
         if self.settings.clearml.execute_remotely:
             self.task.execute_remotely(queue_name=self.settings.clearml.queue_name)
 
-    def _init_parameters(self):
-        with open(self.settings.params_path) as file:
-            params = yaml.load(file, Loader=yaml.Loader)
-            self.common_params: Optional[Dict[str, Any]] = params.get('common', None)
-            self.step_params = params.get(self.pipeline_step.name, None)
-        if self.common_params:
-            self.task.connect(self.common_params, name="common")
-        if self.step_params:
-            self.task.connect(self.step_params, name=self.pipeline_step.name.replace('_', ' '))
+    def _connect_params(self):
+        if self.step_params is not None:
+            self.task.connect(
+                self.step_params.model_dump(),
+                name=self.pipeline_step.name.replace('_', ' '),
+            )
 
     def _log_success_step_execution(
         self,
@@ -139,7 +138,6 @@ class BasePipelineStep(ABC):
             _ = remote_dataset.get_mutable_local_copy(self._input_directory)
         except ValueError:
             raise DatasetDownloadError()
-
 
     def _upload_output_dataset(self, parent_datasets: list[str]) -> str:
         dataset = Dataset.create(
