@@ -1,61 +1,58 @@
 # Parallel Multi-Source Processing via ClearML Queue on Kubernetes
 
-**Date:** 2026-04-24  
-**Status:** Approved  
-**Scope:** `copier-python-template/` — new capability, activated via `parallel_processing: bool` copier variable
+**Date:** 2026-04-24
+**Status:** Approved
+**Scope:** `copier-python-template/` — parallel file processing, always enabled
 
 ---
 
 ## Context
 
-The template generates ClearML-tracked ML pipelines for drilling time-series data stored as multiple Excel files. The current pipeline processes a single dataset sequentially. This design adds intra-step parallelism: each processing step fans out across Kubernetes pods (one per file), then fans back in before passing a single `dataset_id` to the next step.
+The template generates ClearML-tracked ML pipelines for drilling time-series data stored as multiple Excel files pre-uploaded to S3. The current pipeline processes data sequentially. This design adds intra-step parallelism: PREPROCESS and FEATURE_ENGINEER fan out to ClearML worker tasks (one per file) via dedicated K8s queues, then fan back in before passing a single `dataset_id` to the next step.
 
 ---
 
 ## Pipeline DAG
 
-Old: `PRERUN → PREPROCESS → SPLIT_DATASET → FEATURE_ENGINEER → TRAIN`  
-New: `PRERUN → PREPROCESS → FEATURE_ENGINEER → MERGE → TRAIN`
+**Old:** `PRERUN → PREPROCESS → SPLIT_DATASET → FEATURE_ENGINEER → TRAIN`
+**New:** `PREPROCESS → FEATURE_ENGINEER → TRAIN`
 
-`SPLIT_DATASET` is removed. `MERGE` is added between `FEATURE_ENGINEER` and `TRAIN`.
+`PRERUN` and `SPLIT_DATASET` are removed. Files are pre-uploaded to S3 externally. PREPROCESS is the first step and scans S3 for raw files via `StorageSettings`.
 
 ---
 
 ## Data Flow
 
 ```
-PRERUN (ClearML Task)
-  ├─ reads Excel files from raw data directory
-  ├─ uploads each file to object storage (MinIO/S3)
-  ├─ registers MinIO paths in ClearML Dataset (manifest only, no data in ClearML)
+PREPROCESS (Coordinator) — first step
+  ├─ scans S3: {bucket}/{storage.raw_prefix}/ for Excel files
+  ├─ creates N ClearML worker tasks (one per file), enqueues to preprocess_queue
+  │     Worker task i: reads file_i from S3
+  │                  → writes processed/file_i.parquet to S3
+  ├─ waits for all tasks; failed workers are logged and isolated
+  ├─ merges successful S3 paths → new ClearML Dataset
   └─ → dataset_id
 
-PREPROCESS Coordinator (ClearML Task, K8s pod via ClearML queue)
-  ├─ reads MinIO file paths from ClearML Dataset manifest (no data download)
-  ├─ creates up to max_concurrent_pods Worker Pods via K8s API
-  │     Worker Pod i: reads file_i from source → writes to StorageSettings.processed/file_i.parquet
-  ├─ waits for all pods (rolling window, failure isolation)
-  ├─ registers successful output paths in ClearML Dataset
+FEATURE_ENGINEER (Coordinator)
+  ├─ reads preprocessed S3 paths from ClearML Dataset manifest
+  ├─ creates N ClearML worker tasks, enqueues to feature_engineer_queue
+  │     Worker task i: reads processed/file_i.parquet from S3
+  │                  → downloads labeling config from S3
+  │                  → applies labeling for ACCIDENT_TYPE
+  │                  → applies feature engineering
+  │                  → writes features/file_i.parquet to S3
+  ├─ waits for all tasks; failed workers are logged and isolated
+  ├─ merges successful S3 paths → new ClearML Dataset
   └─ → dataset_id
 
-FEATURE_ENGINEER Coordinator (same pattern as PREPROCESS)
-  ├─ reads preprocessed MinIO paths from ClearML Dataset manifest
-  ├─ creates Worker Pods → writes to StorageSettings.features/file_i.parquet
-  └─ → dataset_id
-
-MERGE (ClearML Task)
-  ├─ reads feature MinIO paths from ClearML Dataset manifest
-  ├─ downloads all files from object storage
-  ├─ concatenates into one DataFrame
-  ├─ uploads as single ClearML Dataset
-  └─ → dataset_id
-
-TRAIN (ClearML Task, unchanged)
+TRAIN (unchanged)
   ├─ downloads merged dataset from ClearML
-  └─ trains one model
+  └─ trains model for the configured ACCIDENT_TYPE
 ```
 
-**Invariant preserved:** `dataset_id: str` remains the only data transfer mechanism between pipeline steps (ClearML contract unchanged).
+**Invariant preserved:** `dataset_id: str` is the only data transfer mechanism between pipeline steps.
+
+**Failure policy:** A failed worker task is logged to the coordinator's ClearML logger and isolated. The coordinator continues with remaining workers and passes only successful outputs to the next step.
 
 ---
 
@@ -63,286 +60,288 @@ TRAIN (ClearML Task, unchanged)
 
 ```
 BasePipelineStep (existing ABC)
-├── BaseCoordinatorStep (NEW ABC)
-│   ├── PreprocessPipelineStep
-│   └── FeatureEngineerPipelineStep
-├── BaseMergeStep (NEW)
-│   └── MergePipelineStep
-└── TrainPipelineStep (unchanged)
+└── BaseCoordinatorStep (new ABC)
+    ├── PreprocessPipelineStep
+    └── FeatureEngineerPipelineStep
 
-BaseWorkerStep (NEW ABC — no ClearML, no BasePipelineStep)
+BaseWorkerStep (new ABC — standalone, does not inherit BasePipelineStep)
 ├── PreprocessWorkerStep
 └── FeatureEngineerWorkerStep
 ```
 
 ### `BaseCoordinatorStep`
 
+All fan-out / wait / merge logic lives here. Concrete steps implement three methods only.
+
 ```python
 class BaseCoordinatorStep(BasePipelineStep):
 
     @abstractmethod
-    def worker_module(self) -> str:
-        """Python module path. e.g. 'src.preprocess.worker'"""
+    def worker_entry_point(self) -> str:
+        """Path to worker script in repo. e.g. 'src/preprocess/worker.py'"""
 
     @abstractmethod
-    def worker_settings(self) -> WorkerResourceSettings:
-        """e.g. return SETTINGS.preprocess.worker"""
+    def _queue_name(self) -> str:
+        """ClearML queue for this step's workers."""
 
-    @abstractmethod
-    def output_storage_path(self) -> Path:
-        """Derived from StorageSettings. e.g. return SETTINGS.storage.processed"""
+    def start(self, dataset_id: str | None = None) -> str:
+        file_paths = self._list_input_files(dataset_id)
+        worker_tasks = self._launch_workers(file_paths)
+        successful_paths = self._wait_for_workers(worker_tasks)
+        return self._create_output_dataset(dataset_id, successful_paths)
 
-    def _output_path(self, file_path: str) -> str:
-        stem = Path(file_path).stem
-        return str(self.output_storage_path() / f"{stem}.parquet")
+    def _launch_workers(self, file_paths: list[str]) -> list[Task]:
+        script = self.task.get_script()
+        tasks = []
+        for file_path in file_paths:
+            worker_task = Task.create(
+                project_name=self.task.get_project_name(),
+                task_name=f"{self.pipeline_step.name}-{Path(file_path).stem}",
+                task_type=TaskTypes.data_processing,
+            )
+            worker_task.set_repo(
+                repo=script["repository"],
+                branch=script["branch"],
+                commit=script["version_num"],
+            )
+            worker_task.set_script(entry_point=self.worker_entry_point(), working_dir=".")
+            worker_task.set_parent(self.task.id)
+            worker_task.connect({
+                "input_file_path": file_path,
+                "output_path": self._output_path(file_path),
+                **self.params.model_dump(),
+            })
+            Task.enqueue(worker_task, queue_name=self._queue_name())
+            tasks.append(worker_task)
+        return tasks
 
-    def start(self, dataset_id: str) -> str:
-        file_paths = self._list_dataset_files(dataset_id)
-        output_paths = [self._output_path(fp) for fp in file_paths]
-        successful_outputs = self._run_workers(file_paths, output_paths)
-        return self._create_output_dataset(dataset_id, successful_outputs)
+    def _wait_for_workers(self, tasks: list[Task]) -> list[str]:
+        """Returns output_paths of successfully completed workers only."""
+        pending = {t.id: t for t in tasks}
+        successful: list[str] = []
+        while pending:
+            for task_id in list(pending):
+                task = Task.get_task(task_id=task_id)
+                status = task.get_status()
+                if status == Task.TaskStatusEnum.completed:
+                    output_path = task.get_parameters()["output_path"]
+                    successful.append(output_path)
+                    pending.pop(task_id)
+                elif status in (Task.TaskStatusEnum.failed, Task.TaskStatusEnum.stopped):
+                    self.task.get_logger().report_text(
+                        f"Worker failed: {task.name} (id={task_id})"
+                    )
+                    pending.pop(task_id)
+            if pending:
+                time.sleep(POLL_INTERVAL_SECONDS)
+        return successful
 ```
 
-Concrete coordinators implement only the three abstract methods:
+`output_storage_path` is derived from `pipeline_step` (already in `BasePipelineStep`) — not redeclared here.
+
+### Concrete coordinator steps
 
 ```python
 class PreprocessPipelineStep(BaseCoordinatorStep):
-    def worker_module(self) -> str: return "src.preprocess.worker"
-    def worker_settings(self) -> WorkerResourceSettings: return SETTINGS.preprocess.worker
-    def output_storage_path(self) -> Path: return SETTINGS.storage.processed
+    def worker_entry_point(self) -> str: return "src/preprocess/worker.py"
+    def _queue_name(self) -> str: return SETTINGS.clearml.preprocess_queue
+
+class FeatureEngineerPipelineStep(BaseCoordinatorStep):
+    def worker_entry_point(self) -> str: return "src/features/worker.py"
+    def _queue_name(self) -> str: return SETTINGS.clearml.feature_engineer_queue
 ```
 
 ### `BaseWorkerStep`
 
-Standalone class. No ClearML, no `BasePipelineStep`. Entry point for K8s worker pods.
+Standalone ClearML task. No pipeline membership. Picked up by K8s ClearML agent from queue. Linked to coordinator via `set_parent`.
 
 ```python
 class BaseWorkerStep:
+    def __init__(self):
+        self.task = Task.init(task_type=TaskTypes.data_processing)
+        self.params = self._connect_params()
+
     @abstractmethod
-    def process(self, file_path: Path, params: BaseModel) -> pd.DataFrame: ...
+    def process(self, input_path: str, output_path: str) -> None: ...
 
     def run(self) -> None:
-        file_path = Path(os.environ["INPUT_FILE_PATH"])
-        output_path = os.environ["OUTPUT_PATH"]
-        params = self._load_params()
-        df = self.process(file_path, params)
-        self._save_to_object_storage(df, output_path)
+        self.process(self.params.input_file_path, self.params.output_path)
 
     @classmethod
     def main(cls) -> None:
         cls().run()
 ```
 
-### `BaseMergeStep`
-
-```python
-class BaseMergeStep(BasePipelineStep):
-    def start(self, dataset_id: str) -> str:
-        paths = self._list_dataset_files(dataset_id)
-        frames = [self._download_from_storage(p) for p in paths]
-        merged = pd.concat(frames, ignore_index=True)
-        return self._upload_dataset(merged, parent_id=dataset_id)
-```
-
----
-
-## K8s Pod Lifecycle
-
-### Rolling window with failure isolation
-
-```python
-def _run_workers(
-    self, file_paths: list[str], output_paths: list[str]
-) -> list[str]:
-    """Returns output_paths of successfully completed workers only."""
-    api = kubernetes.client.CoreV1Api()
-    queue = list(zip(file_paths, output_paths))
-    active: dict[str, str] = {}   # pod_name → output_path
-    successful: list[str] = []
-    deadline = time.time() + SETTINGS.k8s.pod_timeout_seconds
-
-    while queue or active:
-        if time.time() > deadline:
-            raise TimeoutError(f"Worker batch timed out, still active: {list(active)}")
-
-        while queue and len(active) < SETTINGS.k8s.max_concurrent_pods:
-            file_path, output_path = queue.pop(0)
-            pod_name = self._create_worker_pod(api, file_path, output_path)
-            active[pod_name] = output_path
-
-        time.sleep(SETTINGS.k8s.pod_polling_interval_seconds)
-
-        for pod_name in list(active):
-            phase = api.read_namespaced_pod(
-                pod_name, SETTINGS.k8s.namespace
-            ).status.phase
-            if phase == "Succeeded":
-                successful.append(active.pop(pod_name))
-            elif phase == "Failed":
-                active.pop(pod_name)
-                self._log_pod_failure(api, pod_name)
-
-    return successful
-```
-
-**Failure policy:** A failed pod is isolated — its error is logged to ClearML Logger (`task.get_logger().report_text()`), pod logs are included, and processing continues. The coordinator returns a dataset containing only successful outputs. A total timeout raises `TimeoutError` and fails the coordinator.
-
-### Pod spec
-
-```python
-V1Pod(
-    spec=V1PodSpec(
-        restart_policy="Never",
-        service_account_name=SETTINGS.k8s.service_account,
-        containers=[V1Container(
-            image=SETTINGS.k8s.worker_image,
-            command=["python", "-m", self.worker_module()],
-            env=[
-                V1EnvVar("INPUT_FILE_PATH", file_path),
-                V1EnvVar("OUTPUT_PATH", output_path),
-                V1EnvVar("STEP_PARAMS_JSON", self.step_params.model_dump_json()),
-            ],
-            resources=V1ResourceRequirements(
-                requests={"cpu": ws.cpu_request, "memory": ws.memory_request},
-                limits={"cpu": ws.cpu_limit, "memory": ws.memory_limit},
-            ),
-        )],
-    ),
-)
-```
-
-Pod name: `{step_name}-{file_stem}` (lowercase, hyphens).
+Worker is launched as entry point: `python src/preprocess/worker.py`
 
 ---
 
 ## Settings
 
-All settings follow the existing `__` delimiter pattern from `src/settings.py`.
-
 ```python
-class WorkerResourceSettings(BaseModel):
-    cpu_request: str = "1"
-    cpu_limit: str = "2"
-    memory_request: str = "2Gi"
-    memory_limit: str = "4Gi"
-
-class K8sSettings(BaseModel):
-    namespace: str = "default"
-    service_account: str = "clearml-worker"
-    worker_image: str                         # required, no default
-    max_concurrent_pods: int = 5
-    pod_polling_interval_seconds: int = 10
-    pod_timeout_seconds: int = 3600
-
-class PreprocessSettings(BaseModel):
-    worker: WorkerResourceSettings = WorkerResourceSettings()
-
-class FeatureEngineerSettings(BaseModel):
-    worker: WorkerResourceSettings = WorkerResourceSettings()
-
 class ObjectStorageSettings(BaseModel):
-    endpoint: str                              # required, e.g. http://minio:9000
-    bucket: str                                # required
-    access_key: str                            # required
-    secret_key: str                            # required
+    endpoint: str       # required — e.g. http://minio:9000
+    bucket: str         # required
+    access_key: str     # required
+    secret_key: str     # required
+    raw_prefix: str     # required — S3 path to raw Excel files
 
 class StorageSettings(BaseModel):
-    raw: Path = Path("data/raw")
-    processed: Path = Path("data/processed")
-    features: Path = Path("data/features")
-    merged: Path = Path("data/merged")        # NEW
-    # ... existing artifact paths
+    # existing fields preserved
+    labeling_config_prefix: str = "configs/labeling"
+    # full path: {labeling_config_prefix}/{accident_type}.yaml
+
+class ClearmlSettings(BaseModel):
+    # existing fields preserved
+    preprocess_queue: str              # required — K8s queue for PREPROCESS workers
+    feature_engineer_queue: str        # required — K8s queue for FEATURE_ENGINEER workers
+    worker_poll_interval_seconds: int = 30  # polling interval when waiting for workers
 
 class Settings(BaseSettings):
-    clearml: ClearmlSettings = ClearmlSettings()
+    clearml: ClearmlSettings
     storage: StorageSettings = StorageSettings()
-    object_storage: ObjectStorageSettings = ObjectStorageSettings()  # NEW
-    k8s: K8sSettings = K8sSettings()                                 # NEW
-    preprocess: PreprocessSettings = PreprocessSettings()            # NEW
-    feature_engineer: FeatureEngineerSettings = FeatureEngineerSettings()  # NEW
+    object_storage: ObjectStorageSettings
+    accident_type: str           # required — drives labeling config path
+
+    @property
+    def labeling_config_path(self) -> str:
+        return f"{self.storage.labeling_config_prefix}/{self.accident_type}.yaml"
 ```
 
 `.env` example:
 ```bash
 OBJECT_STORAGE__ENDPOINT=http://minio:9000
-OBJECT_STORAGE__BUCKET=ml-pipeline
+OBJECT_STORAGE__BUCKET=ml-data
 OBJECT_STORAGE__ACCESS_KEY=minioadmin
 OBJECT_STORAGE__SECRET_KEY=minioadmin
+OBJECT_STORAGE__RAW_PREFIX=drilling/raw/
 
-K8S__NAMESPACE=ml-jobs
-K8S__WORKER_IMAGE=registry.example.com/ml-project:latest
-K8S__MAX_CONCURRENT_PODS=5
-K8S__POD_TIMEOUT_SECONDS=3600
+CLEARML__PREPROCESS_QUEUE=preprocess-workers
+CLEARML__FEATURE_ENGINEER_QUEUE=feature-engineer-workers
 
-PREPROCESS__WORKER__CPU_REQUEST=2
-PREPROCESS__WORKER__CPU_LIMIT=4
-PREPROCESS__WORKER__MEMORY_REQUEST=4Gi
-PREPROCESS__WORKER__MEMORY_LIMIT=8Gi
-
-FEATURE_ENGINEER__WORKER__CPU_REQUEST=4
-FEATURE_ENGINEER__WORKER__CPU_LIMIT=8
-FEATURE_ENGINEER__WORKER__MEMORY_REQUEST=8Gi
-FEATURE_ENGINEER__WORKER__MEMORY_LIMIT=16Gi
+ACCIDENT_TYPE=stuck_pipe
 ```
 
 ---
 
-## Copier Template Changes
+## File Structure
 
-### New variable in `copier.yml`
-
-```yaml
-parallel_processing:
-  type: bool
-  default: false
-  help: "Enable parallel file processing via Kubernetes pods"
-```
-
-### New files (`.jinja`, conditional on `parallel_processing`)
+### New files
 
 ```
-copier-python-template/
-├── src/core/
-│   ├── coordinator_step.py.jinja
-│   ├── worker_step.py.jinja
-│   └── merge_step.py.jinja
-├── src/preprocess/
-│   └── worker.py.jinja
-├── src/features/
-│   └── worker.py.jinja
-├── src/merge/
-│   ├── __init__.py
-│   └── merge_pipeline_step.py.jinja
-└── k8s/
-    └── rbac.yaml.jinja
+src/core/coordinator_step.py          # BaseCoordinatorStep ABC
+src/core/worker_step.py               # BaseWorkerStep ABC
+src/preprocess/worker.py              # PreprocessWorkerStep + entry point
+src/features/worker.py                # FeatureEngineerWorkerStep + entry point
 ```
 
-### Modified files (conditional jinja blocks added)
+### Deleted files
+
+```
+src/features/split_dataset_pipeline_step.py
+```
+
+### Modified files
 
 | File | Change |
 |------|--------|
-| `src/settings.py.jinja` | `+ K8sSettings`, `+ WorkerResourceSettings` per step, `+ StorageSettings.merged` |
-| `src/common/pipeline_steps.py.jinja` | `+ MERGE` constant |
-| `src/pipelines/pipeline.py.jinja` | New DAG: `SPLIT_DATASET` removed, `MERGE` added |
-| `src/preprocess/preprocess_pipeline_step.py.jinja` | Inherits `BaseCoordinatorStep` when `parallel_processing=true` |
-| `src/features/feature_engineer_pipeline_step.py.jinja` | Inherits `BaseCoordinatorStep` when `parallel_processing=true` |
+| `src/settings.py.jinja` | Add `ObjectStorageSettings`, `ClearmlSettings` queues, `StorageSettings.labeling_config_prefix`, `Settings.accident_type` |
+| `src/common/pipeline_steps.py` | Remove `PRERUN`, `SPLIT_DATASET` constants |
+| `src/pipelines/pipeline.py` | New DAG: `PREPROCESS → FEATURE_ENGINEER → TRAIN` |
+| `src/preprocess/preprocess_pipeline_step.py` | Inherit `BaseCoordinatorStep` |
+| `src/features/feature_engineer_pipeline_step.py` | Inherit `BaseCoordinatorStep` |
 
-### `k8s/rbac.yaml.jinja`
+### Pipeline DAG in `pipeline.py`
 
-Generated only when `parallel_processing=true`. Contains `ServiceAccount`, `Role` (pods: create/get/list/watch + pods/log: get), and `RoleBinding` for `clearml-worker` in the configured namespace.
+```python
+pipe.add_function_step(
+    name=PREPROCESS.name,
+    function=run_preprocess,
+    function_return=["dataset_id"],
+)
+pipe.add_function_step(
+    name=FEATURE_ENGINEER.name,
+    function=run_feature_engineer,
+    parents=[PREPROCESS.name],
+    function_kwargs={"dataset_id": "${preprocess.dataset_id}"},
+    function_return=["dataset_id"],
+)
+pipe.add_function_step(
+    name=TRAIN.name,
+    function=run_train,
+    parents=[FEATURE_ENGINEER.name],
+    function_kwargs={"dataset_id": "${feature_engineer.dataset_id}"},
+    function_return=["dataset_id"],
+)
+```
+
+---
+
+## Testing
+
+Tests live in `copier-python-template/tests/` — ClearML and S3 are mocked.
+
+### New test files
+
+```
+tests/test_coordinator_step.py
+tests/test_worker_step.py
+```
+
+### `test_coordinator_step.py`
+
+```python
+@patch("clearml.Task.create")
+@patch("clearml.Task.enqueue")
+def test_launch_workers_creates_one_task_per_file(mock_enqueue, mock_create):
+    step = PreprocessPipelineStep(params=PreprocessParams())
+    step._launch_workers(["s3://bucket/file1.xlsx", "s3://bucket/file2.xlsx"])
+    assert mock_create.call_count == 2
+    assert mock_enqueue.call_count == 2
+
+@patch("clearml.Task.get_task")
+def test_wait_isolates_failed_workers(mock_get_task):
+    # one completed, one failed → only one output_path returned
+    ...
+
+def test_output_path_uses_pipeline_step_dir():
+    step = PreprocessPipelineStep(params=PreprocessParams())
+    path = step._output_path("s3://bucket/raw/file1.xlsx")
+    assert "processed" in path
+    assert path.endswith("file1.parquet")
+```
+
+### `test_worker_step.py`
+
+```python
+@patch("boto3.client")
+def test_preprocess_worker_reads_input_and_writes_output(mock_s3):
+    worker = PreprocessWorkerStep()
+    worker.process(
+        input_path="s3://bucket/raw/file1.xlsx",
+        output_path="s3://bucket/processed/file1.parquet",
+    )
+    mock_s3.return_value.download_file.assert_called_once()
+    mock_s3.return_value.upload_file.assert_called_once()
+
+@patch("boto3.client")
+def test_feature_engineer_worker_applies_labeling(mock_s3):
+    # verify labeling is applied for the configured accident_type
+    ...
+```
 
 ---
 
 ## Agent Checklist
 
 Before modifying `BaseCoordinatorStep` or any coordinator step:
-- [ ] Does `output_storage_path()` return a path from `StorageSettings`, not a hardcoded string?
-- [ ] Does `_run_workers()` respect `SETTINGS.k8s.max_concurrent_pods`?
-- [ ] Does a failed pod log to ClearML and continue (not raise immediately)?
-- [ ] Does `start()` still accept `dataset_id: str` and return `str`?
-- [ ] Does the coordinator read file list from ClearML Dataset metadata only (no download)?
+- [ ] Does `_queue_name()` read from `SETTINGS.clearml.*_queue`?
+- [ ] Does `set_parent(self.task.id)` appear in every worker task creation?
+- [ ] Does `set_repo()` propagate coordinator's git repo + commit to workers?
+- [ ] Does a failed worker log to coordinator's ClearML logger and continue (not raise)?
+- [ ] Does `start()` still accept `dataset_id: str | None` and return `str`?
 
 Before modifying `BaseWorkerStep` or any worker:
-- [ ] Does the worker read `INPUT_FILE_PATH`, `OUTPUT_PATH`, `STEP_PARAMS_JSON` from env?
-- [ ] Does the worker have zero ClearML imports?
+- [ ] Does the worker call `Task.init()` as its first action?
+- [ ] Does `process()` read from S3 and write to S3 only?
 - [ ] Does `main()` call `cls().run()` as entry point?
