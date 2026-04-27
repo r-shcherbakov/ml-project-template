@@ -12,8 +12,8 @@ class FeatureEngineerParams(BaseModel):
 
 
 class FeatureEngineerPipelineStep(BaseCoordinatorStep):
-    def __init__(self, params: FeatureEngineerParams = None) -> None:
-        super().__init__(FEATURE_ENGINEER, params=params or FeatureEngineerParams())
+    def __init__(self, params: FeatureEngineerParams) -> None:
+        super().__init__(FEATURE_ENGINEER, params=params)
 
     def worker_entry_point(self) -> str:
         return "src/features/worker.py"
