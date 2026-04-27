@@ -23,27 +23,16 @@ class PipelineStep:
         return self.name
 
 
-PRERUN = PipelineStep(
-    name="prerun",
-    task_type=TaskTypes.service.name,
-    input_directory=storage_settings.raw_folder,
-)
 PREPROCESS = PipelineStep(
     name="preprocess",
     task_type=TaskTypes.data_processing.name,
     input_directory=storage_settings.raw_folder,
     output_directory=storage_settings.processed_folder
 )
-SPLIT_DATASET = PipelineStep(
-    name="split_dataset",
-    task_type=TaskTypes.data_processing.name,
-    input_directory=storage_settings.processed_folder,
-    output_directory=storage_settings.splitted_folder
-)
 FEATURE_ENGINEER = PipelineStep(
     name="feature_engineer",
     task_type=TaskTypes.data_processing.name,
-    input_directory=storage_settings.splitted_folder,
+    input_directory=storage_settings.processed_folder,
     output_directory=storage_settings.features_folder
 )
 SELECT_FEATURES = PipelineStep(
