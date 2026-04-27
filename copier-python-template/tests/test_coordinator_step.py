@@ -1,6 +1,4 @@
-import pytest
-from unittest.mock import MagicMock, patch, call
-from pydantic import BaseModel
+from unittest.mock import MagicMock, patch
 
 
 def _make_coordinator_class():

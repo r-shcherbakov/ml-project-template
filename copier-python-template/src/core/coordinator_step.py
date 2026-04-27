@@ -3,7 +3,7 @@
 import time
 from abc import abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import boto3
 from clearml import Dataset, Task, TaskTypes
@@ -23,7 +23,7 @@ class BaseCoordinatorStep(BasePipelineStep):
     def _queue_name(self) -> str:
         """ClearML queue name for this step's worker tasks."""
 
-    def _s3_client(self):
+    def _s3_client(self) -> Any:
         return boto3.client(
             "s3",
             endpoint_url=SETTINGS.object_storage.endpoint,
@@ -59,6 +59,11 @@ class BaseCoordinatorStep(BasePipelineStep):
 
     def _launch_workers(self, file_paths: list[str]) -> list[Task]:
         script = self.task.get_script()
+        if not script or not script.get("repository"):
+            raise RuntimeError(
+                "Coordinator task has no git script info; "
+                "cannot propagate repo to worker tasks."
+            )
         tasks = []
         for file_path in file_paths:
             worker_task = Task.create(
@@ -88,17 +93,31 @@ class BaseCoordinatorStep(BasePipelineStep):
             tasks.append(worker_task)
         return tasks
 
-    def _wait_for_workers(self, tasks: list[Task]) -> list[str]:
+    def _wait_for_workers(
+        self, tasks: list[Task], timeout_seconds: float = 3600.0
+    ) -> list[str]:
         """Returns output_paths of successfully completed workers only."""
+        deadline = time.monotonic() + timeout_seconds
         pending = {t.id: t for t in tasks}
         successful: list[str] = []
         while pending:
+            if time.monotonic() > deadline:
+                for task_id in list(pending):
+                    self.task.get_logger().report_text(
+                        f"Worker timed out: {task_id}"
+                    )
+                break
             for task_id in list(pending):
                 remote = Task.get_task(task_id=task_id)
                 status = remote.get_status()
                 if status == "completed":
                     output_path = remote.get_parameters(cast=True).get("worker/output_path", "")
-                    successful.append(output_path)
+                    if output_path:
+                        successful.append(output_path)
+                    else:
+                        self.task.get_logger().report_text(
+                            f"Worker completed but reported no output_path: {remote.name}"
+                        )
                     pending.pop(task_id)
                 elif status in ("failed", "stopped"):
                     self.task.get_logger().report_text(
