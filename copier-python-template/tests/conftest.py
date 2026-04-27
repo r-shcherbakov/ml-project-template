@@ -100,9 +100,22 @@ def _register_settings_stub():
     StorageSettings = _make_storage_settings()
     ArtifactsSettings = _make_artifacts_settings()
 
+    class ClearmlSettings:
+        project = "test-project"
+        queue_name = "default"
+        execute_remotely = False
+        time_limit = None
+
+    class Settings:
+        storage = StorageSettings()
+        artifacts = ArtifactsSettings()
+        clearml = ClearmlSettings()
+
     stub = types.ModuleType("src.settings")
     stub.StorageSettings = StorageSettings
     stub.ArtifactsSettings = ArtifactsSettings
+    stub.Settings = Settings
+    stub.SETTINGS = Settings()
 
     # Make sure src package exists in sys.modules too
     if "src" not in sys.modules:

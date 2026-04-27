@@ -60,6 +60,7 @@ GROUP_ID = Feature(
 )
 TARGET = Feature(
     name="target",
+    dtype="float32",
 )
 DISCRETE_PREDICTION = Feature(
     name="discrete_prediction",
