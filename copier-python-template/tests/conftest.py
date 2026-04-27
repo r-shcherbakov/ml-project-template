@@ -126,6 +126,11 @@ def _register_settings_stub():
         artifacts = ArtifactsSettings()
         clearml = ClearmlSettings()
         object_storage = ObjectStorageSettings()
+        accident_type = "test_accident"
+
+        @property
+        def labeling_config_path(self) -> Path:
+            return _DATA_ROOT / "labels" / f"{self.accident_type}.yaml"
 
     stub = types.ModuleType("src.settings")
     stub.StorageSettings = StorageSettings
