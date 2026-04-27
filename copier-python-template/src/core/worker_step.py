@@ -26,13 +26,14 @@ class BaseWorkerStep(ABC):
         """Process single file from S3 input_path, save result to S3 output_path."""
 
     def run(self) -> None:
-        params = self._get_worker_params()
         try:
+            params = self._get_worker_params()
             input_path: str = params["worker/input_file_path"]
             output_path: str = params["worker/output_path"]
         except KeyError as e:
             self.task.get_logger().report_text(f"Missing required worker parameter: {e}")
             raise ValueError(f"Missing required worker parameter: {e}") from e
+        self._worker_params: dict[str, str] = params
         self.process(input_path, output_path)
 
     @classmethod
