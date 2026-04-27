@@ -9,3 +9,4 @@ report/
 .dolt/
 *.db
 .beads-credential-key
+.beads/
