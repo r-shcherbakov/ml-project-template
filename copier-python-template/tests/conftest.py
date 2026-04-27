@@ -126,5 +126,58 @@ def _register_settings_stub():
     sys.modules["src.settings"] = stub
 
 
+def _register_ml_stubs():
+    """Stub heavy ML dependencies (pandas, sklearn) so src.core can be
+    imported without requiring a full ML installation in the test environment.
+
+    clearml is pre-imported first so it caches the real numpy before we
+    register any stubs (clearml internals depend on numpy.ndarray).
+    """
+    # Pre-import clearml so it loads the real numpy into sys.modules before we
+    # register any lightweight stubs.  If clearml is unavailable the tests will
+    # fail for a different reason, which is acceptable.
+    try:
+        import clearml  # noqa: F401
+    except Exception:
+        pass
+
+    # Stub pandas (not needed by clearml, but needed by pipeline_step.py and
+    # src/utilities/utils.py which references pd.DataFrame in function signatures).
+    if "pandas" not in sys.modules:
+        pandas_stub = types.ModuleType("pandas")
+
+        class _DataFrame:
+            pass
+
+        pandas_stub.DataFrame = _DataFrame
+        sys.modules["pandas"] = pandas_stub
+
+    # Stub sklearn / sklearn.base for BaseTransformer
+    if "sklearn" not in sys.modules:
+        sklearn_stub = types.ModuleType("sklearn")
+        sklearn_stub.__path__ = []
+        sys.modules["sklearn"] = sklearn_stub
+    else:
+        sklearn_stub = sys.modules["sklearn"]
+
+    if "sklearn.base" not in sys.modules:
+        sklearn_base = types.ModuleType("sklearn.base")
+        sys.modules["sklearn.base"] = sklearn_base
+        sklearn_stub.base = sklearn_base
+    else:
+        sklearn_base = sys.modules["sklearn.base"]
+
+    if not hasattr(sklearn_base, "BaseEstimator"):
+        class BaseEstimator:
+            pass
+        sklearn_base.BaseEstimator = BaseEstimator
+
+    if not hasattr(sklearn_base, "TransformerMixin"):
+        class TransformerMixin:
+            pass
+        sklearn_base.TransformerMixin = TransformerMixin
+
+
 # Register before any test collection so pipeline_steps.py can be imported.
 _register_settings_stub()
+_register_ml_stubs()
