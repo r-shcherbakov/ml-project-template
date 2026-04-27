@@ -107,6 +107,8 @@ def _register_settings_stub():
         time_limit = None
         tags = ["test-project"]
         worker_poll_interval_seconds = 30
+        preprocess_queue = "default"
+        feature_engineer_queue = "default"
 
     class ObjectStorageSettings:
         endpoint = "http://localhost:9000"
@@ -142,28 +144,17 @@ def _register_settings_stub():
 
 
 def _register_preprocess_stub():
-    """Stub src.preprocess.preprocess_pipeline_step to expose PreprocessParams
-    and PreprocessPipelineStep without triggering the full import chain
-    (bottleneck, sklearn.pipeline, etc.)."""
-    from pydantic import BaseModel
+    """Ensure src.preprocess package path is registered.
 
-    class PreprocessParams(BaseModel):
-        skip_mark: bool = False
-
-    class PreprocessPipelineStep:
-        """Minimal stub — requires params argument (matches real signature)."""
-        def __init__(self, params: PreprocessParams):
-            self.params = params
-
+    The real src/preprocess/preprocess_pipeline_step.py no longer imports
+    heavy ML libraries (sklearn, pandas), so we allow the real module to be
+    imported directly. We only ensure the package namespace exists in
+    sys.modules so Python can resolve `src.preprocess.*` imports.
+    """
     if "src.preprocess" not in sys.modules:
         preprocess_pkg = types.ModuleType("src.preprocess")
         preprocess_pkg.__path__ = [str(_TEMPLATE_ROOT / "src" / "preprocess")]
         sys.modules["src.preprocess"] = preprocess_pkg
-
-    stub = types.ModuleType("src.preprocess.preprocess_pipeline_step")
-    stub.PreprocessParams = PreprocessParams
-    stub.PreprocessPipelineStep = PreprocessPipelineStep
-    sys.modules["src.preprocess.preprocess_pipeline_step"] = stub
 
 
 def _register_train_stub():
