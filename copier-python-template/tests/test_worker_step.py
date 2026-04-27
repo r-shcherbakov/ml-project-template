@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def _make_worker_class():
@@ -49,3 +48,4 @@ def test_worker_step_main_creates_and_runs(mock_init):
     mock_init.return_value = mock_task
     WorkerClass = _make_worker_class()
     WorkerClass.main()
+    mock_init.assert_called_once()

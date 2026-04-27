@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+"""Base class for standalone ClearML worker tasks."""
 from abc import ABC, abstractmethod
 
 from clearml import Task, TaskTypes
@@ -16,7 +18,7 @@ class BaseWorkerStep(ABC):
             reuse_last_task_id=False,
         )
 
-    def _get_worker_params(self) -> dict:
+    def _get_worker_params(self) -> dict[str, str]:
         return self.task.get_parameters(cast=True)
 
     @abstractmethod
@@ -25,8 +27,12 @@ class BaseWorkerStep(ABC):
 
     def run(self) -> None:
         params = self._get_worker_params()
-        input_path: str = params["worker/input_file_path"]
-        output_path: str = params["worker/output_path"]
+        try:
+            input_path: str = params["worker/input_file_path"]
+            output_path: str = params["worker/output_path"]
+        except KeyError as e:
+            self.task.get_logger().report_text(f"Missing required worker parameter: {e}")
+            raise ValueError(f"Missing required worker parameter: {e}") from e
         self.process(input_path, output_path)
 
     @classmethod
