@@ -105,16 +105,31 @@ def _register_settings_stub():
         queue_name = "default"
         execute_remotely = False
         time_limit = None
+        tags = ["test-project"]
+        worker_poll_interval_seconds = 30
+
+    class ObjectStorageSettings:
+        endpoint = "http://localhost:9000"
+        bucket = "test-bucket"
+
+        class _Secret:
+            def get_secret_value(self):
+                return "test-value"
+
+        access_key = _Secret()
+        secret_key = _Secret()
 
     class Settings:
         storage = StorageSettings()
         artifacts = ArtifactsSettings()
         clearml = ClearmlSettings()
+        object_storage = ObjectStorageSettings()
 
     stub = types.ModuleType("src.settings")
     stub.StorageSettings = StorageSettings
     stub.ArtifactsSettings = ArtifactsSettings
     stub.Settings = Settings
+    stub.ObjectStorageSettings = ObjectStorageSettings
     stub.SETTINGS = Settings()
 
     # Make sure src package exists in sys.modules too
@@ -124,6 +139,71 @@ def _register_settings_stub():
         sys.modules["src"] = src_pkg
 
     sys.modules["src.settings"] = stub
+
+
+def _register_preprocess_stub():
+    """Stub src.preprocess.preprocess_pipeline_step to expose PreprocessParams
+    and PreprocessPipelineStep without triggering the full import chain
+    (bottleneck, sklearn.pipeline, etc.)."""
+    from pydantic import BaseModel
+
+    class PreprocessParams(BaseModel):
+        skip_mark: bool = False
+
+    class PreprocessPipelineStep:
+        """Minimal stub — requires params argument (matches real signature)."""
+        def __init__(self, params: PreprocessParams):
+            self.params = params
+
+    if "src.preprocess" not in sys.modules:
+        preprocess_pkg = types.ModuleType("src.preprocess")
+        preprocess_pkg.__path__ = [str(_TEMPLATE_ROOT / "src" / "preprocess")]
+        sys.modules["src.preprocess"] = preprocess_pkg
+
+    stub = types.ModuleType("src.preprocess.preprocess_pipeline_step")
+    stub.PreprocessParams = PreprocessParams
+    stub.PreprocessPipelineStep = PreprocessPipelineStep
+    sys.modules["src.preprocess.preprocess_pipeline_step"] = stub
+
+
+def _register_train_stub():
+    """Stub src.train.train_pipeline_step to expose TrainParams and
+    TrainPipelineStep without triggering the full import chain (catboost, etc.)."""
+    from pydantic import BaseModel
+
+    class TrainParams(BaseModel):
+        skip_cv: bool = True
+        n_splits: int = 4
+        train_final_model: bool = True
+        binary_threshold: float = 0.5
+
+    class TrainPipelineStep:
+        """Minimal stub — requires params argument (matches real signature)."""
+        def __init__(self, params: TrainParams):
+            self.params = params
+
+    if "src.train" not in sys.modules:
+        train_pkg = types.ModuleType("src.train")
+        train_pkg.__path__ = [str(_TEMPLATE_ROOT / "src" / "train")]
+        sys.modules["src.train"] = train_pkg
+
+    stub = types.ModuleType("src.train.train_pipeline_step")
+    stub.TrainParams = TrainParams
+    stub.TrainPipelineStep = TrainPipelineStep
+    sys.modules["src.train.train_pipeline_step"] = stub
+
+
+def _register_boto3_stub():
+    """Stub boto3 so coordinator_step.py can be imported without boto3 installed."""
+    if "boto3" not in sys.modules:
+        boto3_stub = types.ModuleType("boto3")
+
+        def _client(*args, **kwargs):
+            import unittest.mock as _mock
+            return _mock.MagicMock()
+
+        boto3_stub.client = _client
+        sys.modules["boto3"] = boto3_stub
 
 
 def _register_ml_stubs():
@@ -177,7 +257,28 @@ def _register_ml_stubs():
             pass
         sklearn_base.TransformerMixin = TransformerMixin
 
+    # Stub sklearn.pipeline for preprocess_pipeline_step.py
+    if "sklearn.pipeline" not in sys.modules:
+        sklearn_pipeline = types.ModuleType("sklearn.pipeline")
+
+        class Pipeline:
+            def __init__(self, steps, **kwargs):
+                self.steps = steps
+
+        sklearn_pipeline.Pipeline = Pipeline
+        sys.modules["sklearn.pipeline"] = sklearn_pipeline
+        sklearn_stub.pipeline = sklearn_pipeline
+
+    # Stub sklearn.set_config for preprocess_pipeline_step.py
+    if not hasattr(sklearn_stub, "set_config"):
+        def set_config(**kwargs):
+            pass
+        sklearn_stub.set_config = set_config
+
 
 # Register before any test collection so pipeline_steps.py can be imported.
 _register_settings_stub()
 _register_ml_stubs()
+_register_boto3_stub()
+_register_preprocess_stub()
+_register_train_stub()
