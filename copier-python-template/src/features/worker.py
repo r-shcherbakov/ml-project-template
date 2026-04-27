@@ -55,6 +55,8 @@ class FeatureEngineerWorkerStep(BaseWorkerStep):
 
 
 def _build_feature_engineer(labeling_config: dict[str, Any]) -> "FeatureEngineer":  # type: ignore[name-defined]
+    # labeling_config reserved for future use; FeatureEngineer reads its
+    # config from SETTINGS at construction time.
     from src.features.feature_engineer import FeatureEngineer
     return FeatureEngineer()
 
