@@ -6,11 +6,9 @@ before a generated project exists. A minimal src.settings stub is registered
 in sys.modules so that pipeline_steps.py and other src modules can be imported
 without a live ClearML connection or a rendered settings.py.jinja.
 """
-import os
 import sys
 import types
 from pathlib import Path
-import pytest
 
 # Ensure copier-python-template/ is on sys.path so `src.*` imports resolve.
 _TEMPLATE_ROOT = Path(__file__).resolve().parents[1]
@@ -22,17 +20,6 @@ _DATA_ROOT = _TEMPLATE_ROOT / "data"
 
 def _make_storage_settings():
     """Return a minimal StorageSettings-like object for testing."""
-    from dataclasses import dataclass
-
-    class _FolderDescriptor:
-        def __init__(self, name):
-            self._name = name
-
-        def __get__(self, obj, objtype=None):
-            d = _DATA_ROOT / self._name
-            d.mkdir(exist_ok=True, parents=True)
-            return d
-
     class StorageSettings:
         root_folder = _DATA_ROOT
 

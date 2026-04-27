@@ -7,17 +7,13 @@ import pandas as pd
 
 from src.common.exceptions import PipelineExecutionError
 from src.common.pipeline_steps import (
-    PRERUN,
     PREPROCESS,
     FEATURE_ENGINEER,
-    SPLIT_DATASET,
     TRAIN,
 )
 from src.features import (
     FeatureEngineerPipelineStep,
-    SplitDatasetPipelineStep,
 )
-from src.features.split_dataset_pipeline_step import SplitDatasetParams
 from src.preprocess import PreprocessPipelineStep
 from src.preprocess.preprocess_pipeline_step import PreprocessParams
 from src.train import TrainPipelineStep
@@ -29,37 +25,9 @@ if TYPE_CHECKING:
     from src.features.feature_engineer import FeatureEngineer
 
 
-def run_prerun_step() -> str:
-    if not is_empty_dir(SETTINGS.storage.raw_folder):
-        try:
-            # Upload raw data from remote storage
-            pass
-        except Exception:
-            raise PipelineExecutionError("Raw data is not available")
-
-        remote_dataset = Dataset.create(
-            dataset_project=SETTINGS.clearml.project,
-            dataset_name="raw data",
-            dataset_tags=SETTINGS.clearml.tags,
-        )
-        remote_dataset.add_files(path=SETTINGS.storage.raw_folder)
-        remote_dataset.finalize(auto_upload=True)
-
-        return remote_dataset.id
-
-
 def run_preprocess_step(dataset_id: str) -> str:
     return PreprocessPipelineStep(
         params=PreprocessParams(skip_mark=False),
-    ).start(dataset_id=dataset_id)
-
-
-def run_split_dataset_step(dataset_id: str) -> str:
-    return SplitDatasetPipelineStep(
-        params=SplitDatasetParams(
-            split_test=True,
-            num_test_objects=2,
-        ),
     ).start(dataset_id=dataset_id)
 
 
@@ -91,42 +59,11 @@ if __name__ == '__main__':
     )
 
     pipe.add_function_step(
-        name=PRERUN.name,
-        task_type=PRERUN.task_type,
-        function=run_prerun_step,
-        function_return=['dataset_id'],
-        cache_executed_step=True,
-        continue_behaviour=dict(
-            continue_on_fail=False,
-            continue_on_abort=False,
-        ),
-        time_limit=SETTINGS.clearml.time_limit,
-    )
-
-    pipe.add_function_step(
         name=PREPROCESS.name,
         task_type=PREPROCESS.task_type,
-        parents=[PRERUN.name],
         function=run_preprocess_step,
         function_kwargs=dict(
-            dataset_id='${prerun.dataset_id}'
-        ),
-        function_return=['dataset_id'],
-        cache_executed_step=True,
-        continue_behaviour=dict(
-            continue_on_fail=False,
-            continue_on_abort=False,
-        ),
-        time_limit=SETTINGS.clearml.time_limit,
-    )
-
-    pipe.add_function_step(
-        name=SPLIT_DATASET.name,
-        task_type=SPLIT_DATASET.task_type,
-        parents=[PREPROCESS.name],
-        function=run_split_dataset_step,
-        function_kwargs=dict(
-            dataset_id='${preprocess.dataset_id}'
+            dataset_id=''
         ),
         function_return=['dataset_id'],
         cache_executed_step=True,
@@ -140,10 +77,10 @@ if __name__ == '__main__':
     pipe.add_function_step(
         name=FEATURE_ENGINEER.name,
         task_type=FEATURE_ENGINEER.task_type,
-        parents=[SPLIT_DATASET.name],
+        parents=[PREPROCESS.name],
         function=run_feature_engineer_step,
         function_kwargs=dict(
-            dataset_id='${split_dataset.dataset_id}',
+            dataset_id='${preprocess.dataset_id}',
         ),
         function_return=['feature_engineer', 'dataset_id'],
         cache_executed_step=True,

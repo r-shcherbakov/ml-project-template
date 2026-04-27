@@ -19,7 +19,6 @@ from src.common.exceptions import (
 from src.common.features import GROUP_ID
 from src.common.pipeline_steps import (
     PLOTTING,
-    SPLIT_DATASET,
     PREPROCESS,
 )
 from src.core import BasePipelineStep
@@ -52,7 +51,7 @@ class PlottingPipelineStep(BasePipelineStep):
     def _get_groups_mapping(self) -> Dict[str, int]:
         artifacts_task = Task.get_task(
             project_name=self.settings.clearml.project,
-            task_name=f'{SPLIT_DATASET.name} task',
+            task_name=f'{PREPROCESS.name} task',
             task_filter={'status': ['completed']},
         )
         groups_mapping = artifacts_task.artifacts['groups_mapping'].get()
