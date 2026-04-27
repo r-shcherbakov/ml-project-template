@@ -20,7 +20,7 @@ class BaseCoordinatorStep(BasePipelineStep):
         """Path to worker script in repo. e.g. 'src/preprocess/worker.py'"""
 
     @abstractmethod
-    def _queue_name(self) -> str:
+    def _queue_name(self) -> Optional[str]:
         """ClearML queue name for this step's worker tasks."""
 
     def _s3_client(self) -> Any:
@@ -34,6 +34,7 @@ class BaseCoordinatorStep(BasePipelineStep):
     def _output_path(self, input_s3_path: str) -> str:
         stem = Path(input_s3_path).stem
         bucket = SETTINGS.object_storage.bucket
+        # Assumes S3 prefix equals the local directory name (flat prefix layout)
         output_dir = Path(self.pipeline_step.output_directory).name
         return f"s3://{bucket}/{output_dir}/{stem}.parquet"
 
@@ -64,6 +65,12 @@ class BaseCoordinatorStep(BasePipelineStep):
                 "Coordinator task has no git script info; "
                 "cannot propagate repo to worker tasks."
             )
+        queue = self._queue_name()
+        if not queue:
+            raise ValueError(
+                f"{self.__class__.__name__}._queue_name() returned None. "
+                "Set CLEARML__PREPROCESS_QUEUE / CLEARML__FEATURE_ENGINEER_QUEUE in .env."
+            )
         tasks = []
         for file_path in file_paths:
             worker_task = Task.create(
@@ -89,7 +96,7 @@ class BaseCoordinatorStep(BasePipelineStep):
                 },
                 name="worker",
             )
-            Task.enqueue(worker_task, queue_name=self._queue_name())
+            Task.enqueue(worker_task, queue_name=queue)
             tasks.append(worker_task)
         return tasks
 

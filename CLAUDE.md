@@ -28,7 +28,7 @@ python -m src.pipelines.pipeline                      # run full ClearML pipelin
 ### Pipeline execution flow
 
 ```
-prerun → preprocess → split_dataset → feature_engineer → train → (plotting, postrun optional)
+preprocess → feature_engineer → train → (plotting, postrun optional)
 ```
 
 Each step is a `BasePipelineStep` subclass. Steps are wired together via `ClearMLPipelineController` in `src/pipelines/pipeline.py`. Each step:
