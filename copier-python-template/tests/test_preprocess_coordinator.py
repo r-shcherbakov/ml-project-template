@@ -13,9 +13,8 @@ def test_preprocess_step_worker_entry_point(mock_init):
 def test_preprocess_step_queue_name_from_settings(mock_init):
     mock_init.return_value = MagicMock()
     from src.preprocess.preprocess_pipeline_step import PreprocessPipelineStep, PreprocessParams
-    from src.settings import SETTINGS
     step = PreprocessPipelineStep(params=PreprocessParams())
-    assert step._queue_name() == SETTINGS.clearml.preprocess_queue
+    assert step._queue_name() == "preprocess-workers"
 
 
 @patch("clearml.Task.init")

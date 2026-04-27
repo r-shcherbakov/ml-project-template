@@ -107,8 +107,8 @@ def _register_settings_stub():
         time_limit = None
         tags = ["test-project"]
         worker_poll_interval_seconds = 30
-        preprocess_queue = "default"
-        feature_engineer_queue = "default"
+        preprocess_queue = "preprocess-workers"
+        feature_engineer_queue = "feature-engineer-workers"
 
     class ObjectStorageSettings:
         endpoint = "http://localhost:9000"
