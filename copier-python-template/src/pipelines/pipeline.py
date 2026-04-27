@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+"""ClearML PipelineController entry point: PREPROCESS → FEATURE_ENGINEER → TRAIN."""
 from clearml import PipelineController
 
 from src.common.pipeline_steps import PREPROCESS, FEATURE_ENGINEER, TRAIN
@@ -21,7 +22,7 @@ def run_feature_engineer_step(dataset_id: str) -> str:
 
 
 def run_train_step(dataset_id: str) -> None:
-    return TrainPipelineStep(
+    TrainPipelineStep(
         params=TrainParams(
             skip_cv=True,
             n_splits=4,
@@ -32,6 +33,12 @@ def run_train_step(dataset_id: str) -> None:
 
 
 if __name__ == '__main__':
+    if SETTINGS.clearml.execute_remotely:
+        assert SETTINGS.clearml.preprocess_queue, \
+            "CLEARML__PREPROCESS_QUEUE must be set for remote execution"
+        assert SETTINGS.clearml.feature_engineer_queue, \
+            "CLEARML__FEATURE_ENGINEER_QUEUE must be set for remote execution"
+
     pipe = PipelineController(
         name=f'{SETTINGS.clearml.project} pipeline',
         project=SETTINGS.clearml.project,
