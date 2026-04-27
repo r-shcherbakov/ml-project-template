@@ -4,13 +4,14 @@ import os
 import logging
 from pathlib import Path
 import random
-from typing import Annotated, List, Union
+from typing import Annotated, List, Optional, Union
 
 import numpy as np
 from pydantic import (
     BaseModel,
     DirectoryPath,
     Field,
+    SecretStr,
     computed_field,
     field_validator
 )
@@ -36,8 +37,8 @@ def create_missed_directory(directory: Union[str, Path]) -> Path:
 class ObjectStorageSettings(BaseModel):
     endpoint: str = Field(description="S3/MinIO endpoint URL")
     bucket: str = Field(description="S3 bucket name")
-    access_key: str = Field(description="S3 access key")
-    secret_key: str = Field(description="S3 secret key")
+    access_key: SecretStr = Field(description="S3 access key")
+    secret_key: SecretStr = Field(description="S3 secret key")
 
 
 class ArtifactsSettings(BaseModel):
@@ -132,14 +133,14 @@ class ClearmlSettings(BaseModel):
         ["{{ project_name }}"],
         description=' A list of tags which describe the Task'
     )
-    time_limit: int = Field(
+    time_limit: Optional[int] = Field(
         None,
         description='Step execution time limit, if exceeded the Task is aborted \
             and the pipeline is stopped and marked failed. Default None, no time limit'
     )
     # output_url: str = Field('s3://bucket/data', description='Target storage for the compressed dataset')
-    preprocess_queue: str = Field(description='ClearML queue for PREPROCESS worker tasks')
-    feature_engineer_queue: str = Field(description='ClearML queue for FEATURE_ENGINEER worker tasks')
+    preprocess_queue: Optional[str] = Field(None, description='ClearML queue for PREPROCESS worker tasks')
+    feature_engineer_queue: Optional[str] = Field(None, description='ClearML queue for FEATURE_ENGINEER worker tasks')
     worker_poll_interval_seconds: int = Field(30, description='Polling interval in seconds when waiting for worker tasks')
 
 
