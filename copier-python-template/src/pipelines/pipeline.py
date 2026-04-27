@@ -1,33 +1,23 @@
-from typing import Tuple, TYPE_CHECKING
-
+# -*- coding: utf-8 -*-
 from clearml import PipelineController
 
-from src.common.pipeline_steps import (
-    PREPROCESS,
-    FEATURE_ENGINEER,
-    TRAIN,
-)
-from src.features import (
-    FeatureEngineerPipelineStep,
-)
-from src.preprocess import PreprocessPipelineStep
-from src.preprocess.preprocess_pipeline_step import PreprocessParams
-from src.train import TrainPipelineStep
-from src.train.train_pipeline_step import TrainParams
+from src.common.pipeline_steps import PREPROCESS, FEATURE_ENGINEER, TRAIN
+from src.features.feature_engineer_pipeline_step import FeatureEngineerPipelineStep, FeatureEngineerParams
+from src.preprocess.preprocess_pipeline_step import PreprocessPipelineStep, PreprocessParams
+from src.train.train_pipeline_step import TrainPipelineStep, TrainParams
 from src.settings import SETTINGS
 
-if TYPE_CHECKING:
-    from src.features.feature_engineer import FeatureEngineer
 
-
-def run_preprocess_step(dataset_id: str) -> str:
+def run_preprocess_step() -> str:
     return PreprocessPipelineStep(
         params=PreprocessParams(skip_mark=False),
+    ).start(dataset_id=None)
+
+
+def run_feature_engineer_step(dataset_id: str) -> str:
+    return FeatureEngineerPipelineStep(
+        params=FeatureEngineerParams(),
     ).start(dataset_id=dataset_id)
-
-
-def run_feature_engineer_step(dataset_id: str) -> Tuple['FeatureEngineer', str]:
-    return FeatureEngineerPipelineStep.start(dataset_id=dataset_id)
 
 
 def run_train_step(dataset_id: str) -> None:
@@ -42,7 +32,6 @@ def run_train_step(dataset_id: str) -> None:
 
 
 if __name__ == '__main__':
-
     pipe = PipelineController(
         name=f'{SETTINGS.clearml.project} pipeline',
         project=SETTINGS.clearml.project,
@@ -57,9 +46,6 @@ if __name__ == '__main__':
         name=PREPROCESS.name,
         task_type=PREPROCESS.task_type,
         function=run_preprocess_step,
-        function_kwargs=dict(
-            dataset_id=''
-        ),
         function_return=['dataset_id'],
         cache_executed_step=True,
         continue_behaviour=dict(
@@ -77,7 +63,7 @@ if __name__ == '__main__':
         function_kwargs=dict(
             dataset_id='${preprocess.dataset_id}',
         ),
-        function_return=['feature_engineer', 'dataset_id'],
+        function_return=['dataset_id'],
         cache_executed_step=True,
         continue_behaviour=dict(
             continue_on_fail=False,
