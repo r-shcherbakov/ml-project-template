@@ -133,3 +133,42 @@ def test_wait_for_workers_logs_failed_worker(mock_init, mock_get_task):
     coord._wait_for_workers([task1])
 
     mock_coord_task.get_logger.return_value.report_text.assert_called()
+
+
+@patch("clearml.Task.enqueue")
+@patch("clearml.Task.create")
+@patch("clearml.Task.init")
+def test_launch_workers_raises_if_no_git_script(mock_init, mock_create, mock_enqueue):
+    mock_task = MagicMock()
+    mock_task.get_script.return_value = None
+    mock_task.id = "coordinator-task-id"
+    mock_init.return_value = mock_task
+
+    CoordClass = _make_coordinator_class()
+    coord = CoordClass()
+
+    import pytest
+    with pytest.raises(RuntimeError, match="no git script info"):
+        coord._launch_workers(["s3://bucket/raw/well_001.xlsx"])
+
+
+@patch("clearml.Task.get_task")
+@patch("clearml.Task.init")
+def test_wait_for_workers_times_out(mock_init, mock_get_task):
+    mock_coord_task = MagicMock()
+    mock_init.return_value = mock_coord_task
+
+    mock_running = MagicMock()
+    mock_running.get_status.return_value = "in_progress"
+    mock_running.name = "preprocess-well_001"
+    mock_get_task.return_value = mock_running
+
+    task1 = MagicMock()
+    task1.id = "task1"
+
+    CoordClass = _make_coordinator_class()
+    coord = CoordClass()
+    result = coord._wait_for_workers([task1], timeout_seconds=0.0)
+
+    assert result == []
+    mock_coord_task.get_logger.return_value.report_text.assert_called()
